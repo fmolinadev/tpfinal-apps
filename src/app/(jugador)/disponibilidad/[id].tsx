@@ -8,6 +8,7 @@ import {
     View,
 } from "react-native";
 
+import { Colors, Fonts } from "@/constants/theme";
 import { obtenerTurnos } from "@/servicios/turnos";
 import type { Turno } from "@/tipos/turno";
 
@@ -18,12 +19,23 @@ export default function DisponibilidadScreen() {
 
   useEffect(() => {
     async function load() {
-      const result = await obtenerTurnos(id ?? "espacio_1", "2026-09-15");
-      setTurnos(result);
+      const hoy = new Date();
+      const fecha = [
+        hoy.getFullYear(),
+        String(hoy.getMonth() + 1).padStart(2, "0"),
+        String(hoy.getDate()).padStart(2, "0"),
+      ].join("-");
+      const result = await obtenerTurnos(id ?? "espacio_1", fecha);
+      setTurnos(
+        result.filter(
+          (turno) =>
+            new Date(`${turno.fecha}T${turno.hora}:00`).getTime() > Date.now(),
+        ),
+      );
       setLoading(false);
     }
 
-    load();
+    void load();
   }, [id]);
 
   const renderItem = ({ item }: { item: Turno }) => (
@@ -42,7 +54,10 @@ export default function DisponibilidadScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+        <ActivityIndicator
+          size="large"
+          color={Colors.light.backgroundSelected}
+        />
       </View>
     );
   }
@@ -50,7 +65,14 @@ export default function DisponibilidadScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Disponibilidad</Text>
-      <Text style={styles.subtitle}>Cancha 1 • Sábado 15/09</Text>
+      <Text style={styles.subtitle}>
+        Cancha 1 •{" "}
+        {new Date().toLocaleDateString("es-AR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+        })}
+      </Text>
       <FlatList
         data={turnos}
         keyExtractor={(item) => item.id}
@@ -62,15 +84,30 @@ export default function DisponibilidadScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc", padding: 18 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.backgroundElement,
+    padding: 18,
+  },
   centered: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: Colors.light.backgroundElement,
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 28, fontWeight: "700", color: "#0f172a", marginBottom: 6 },
-  subtitle: { fontSize: 16, color: "#475569", marginBottom: 18 },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: Colors.light.text,
+    marginBottom: 6,
+    fontFamily: Fonts.sans,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: Colors.light.text,
+    marginBottom: 18,
+    fontFamily: Fonts.sans,
+  },
   list: { gap: 10 },
   turnoCard: {
     flexDirection: "row",
@@ -80,9 +117,29 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  turnoLibre: { backgroundColor: "#ecfdf5", borderColor: "#86efac" },
-  turnoBloqueado: { backgroundColor: "#f8fafc", borderColor: "#cbd5e1" },
-  hora: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
-  estado: { textTransform: "uppercase", fontWeight: "700", color: "#334155" },
-  precio: { color: "#4f46e5", fontWeight: "700" },
+  turnoLibre: {
+    backgroundColor: Colors.light.background,
+    borderColor: Colors.light.backgroundSelected,
+  },
+  turnoBloqueado: {
+    backgroundColor: Colors.light.backgroundElement,
+    borderColor: Colors.light.background,
+  },
+  hora: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Colors.light.text,
+    fontFamily: Fonts.sans,
+  },
+  estado: {
+    textTransform: "uppercase",
+    fontWeight: "700",
+    color: Colors.light.text,
+    fontFamily: Fonts.sans,
+  },
+  precio: {
+    color: Colors.light.textSecondary,
+    fontWeight: "700",
+    fontFamily: Fonts.sans,
+  },
 });

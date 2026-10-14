@@ -2,6 +2,7 @@ import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
     Alert,
+    Image,
     Pressable,
     StyleSheet,
     Text,
@@ -20,11 +21,19 @@ export default function LoginScreen() {
   async function handleLogin() {
     try {
       setLoading(true);
-      const { token } = await loginUsuario({ email, password });
+      const { token, usuario } = await loginUsuario({ email, password });
       if (!token) {
         throw new Error("No se generó una sesión válida.");
       }
-      router.replace("/(jugador)/inicio");
+
+      if (usuario.rol === "jugador") {
+        router.replace("/(jugador)/inicio");
+        return;
+      }
+
+      router.replace(
+        usuario.rol === "administrador" ? "/(admin)/agenda" : "/(staff)/agenda",
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Ocurrió un error inesperado.";
@@ -36,6 +45,14 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Image
+          source={require("@/assets/images/villaguay_logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.title}>Iniciar sesión</Text>
         <Text style={styles.label}>Email</Text>
@@ -84,6 +101,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
     backgroundColor: "#ebeaeb",
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  logo: {
+    width: 220,
+    height: 120,
   },
   card: {
     backgroundColor: "#ffffff",

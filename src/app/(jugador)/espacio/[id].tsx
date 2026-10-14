@@ -2,15 +2,15 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
-    Image,
     ScrollView,
     StyleSheet,
     Text,
     View,
 } from "react-native";
 
-import { obtenerEspacio } from "@/servicios/espacios";
-import type { Espacio } from "@/tipos/espacio";
+import { Colors, Fonts } from "@/constants/theme";
+import { getEspacioById } from "@/servicios/espacios";
+import type { Espacio } from "@/tipos";
 
 export default function EspacioDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,8 +19,8 @@ export default function EspacioDetalleScreen() {
 
   useEffect(() => {
     async function load() {
-      const result = await obtenerEspacio(id ?? "");
-      setEspacio(result ?? null);
+      const result = await getEspacioById(id ?? "");
+      setEspacio(result.datos?.[0] ?? null);
       setLoading(false);
     }
 
@@ -30,7 +30,11 @@ export default function EspacioDetalleScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+        <ActivityIndicator
+          size="small"
+          color={Colors.light.backgroundSelected}
+        />
+        <Text>Cargando espacio...</Text>
       </View>
     );
   }
@@ -45,53 +49,62 @@ export default function EspacioDetalleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Image source={{ uri: espacio.foto }} style={styles.image} />
       <Text style={styles.title}>{espacio.nombre}</Text>
       <Text style={styles.meta}>
-        {espacio.deporte} • {espacio.complejo}
+        {espacio.deporte} • {espacio.superficie}
       </Text>
       <Text style={styles.meta}>
-        {espacio.superficie} •{" "}
-        {espacio.iluminacion ? "Con iluminación" : "Sin iluminación"}
+        Luz nocturna: {espacio.luzNocturna ? "Sí" : "No"}
       </Text>
-      <Text style={styles.price}>
-        ${espacio.precioHora.toLocaleString("es-AR")} / hora
-      </Text>
-      <Text style={styles.sectionTitle}>Descripción</Text>
-      <Text style={styles.text}>{espacio.descripcion}</Text>
-      <Text style={styles.sectionTitle}>Características</Text>
-      {espacio.caracteristicas.map((item) => (
+      <Text style={styles.price}>${espacio.precioPorHora} / hora</Text>
+
+      <Text style={styles.sectionTitle}>Reglas</Text>
+      {espacio.reglas.map((item) => (
         <Text key={item} style={styles.text}>
           • {item}
         </Text>
       ))}
-      <Text style={styles.sectionTitle}>Ubicación</Text>
-      <Text style={styles.text}>{espacio.ubicacion}</Text>
-      {espacio.videoUrl && (
-        <Text style={styles.sectionTitle}>Video disponible</Text>
-      )}
+
+      <Text style={styles.sectionTitle}>Video</Text>
+      <Text style={styles.text}>
+        {espacio.videoUrl ? "Video disponible" : "Sin video disponible"}
+      </Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
+  container: { flex: 1, backgroundColor: Colors.light.backgroundElement },
   content: { padding: 20, gap: 10 },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: Colors.light.backgroundElement,
   },
-  image: { width: "100%", height: 220, borderRadius: 18 },
-  title: { fontSize: 28, fontWeight: "700", color: "#0f172a" },
-  meta: { fontSize: 14, color: "#475569" },
-  price: { fontSize: 20, fontWeight: "700", color: "#4f46e5" },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: Colors.light.text,
+    fontFamily: Fonts.sans,
+  },
+  meta: { fontSize: 14, color: Colors.light.text, fontFamily: Fonts.sans },
+  price: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.light.textSecondary,
+    fontFamily: Fonts.sans,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0f172a",
+    color: Colors.light.text,
     marginTop: 8,
   },
-  text: { fontSize: 15, color: "#334155", lineHeight: 22 },
+  text: {
+    fontSize: 15,
+    color: Colors.light.text,
+    lineHeight: 22,
+    fontFamily: Fonts.sans,
+  },
 });

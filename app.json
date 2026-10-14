@@ -30,11 +30,18 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#a55890",
-          "image": "./assets/images/logoUNERsolo.png",
-          "imageWidth": 140
+          "image": "./assets/images/villaguay_splash_icon.png",
+          "imageWidth": 180
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera",
+      "expo-location",
+      "expo-notifications",
+      "expo-video",
+      "expo-sqlite",
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

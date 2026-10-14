@@ -1,55 +1,125 @@
-import { reservasFijasMock, reservasMock } from "@/mocks/reservas";
-import type { Reserva, ReservaFija } from "@/tipos/reserva";
+import { reservas, turnos } from "@/mocks";
+import type { Reserva, RespuestaApi, Turno } from "@/tipos";
+import Storage from "expo-sqlite/kv-store";
 
-export async function obtenerMisReservas(
-  usuarioId: string,
-): Promise<Reserva[]> {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  return reservasMock.filter((reserva) => reserva.usuarioId === usuarioId);
+import { simularFetch } from "./api";
+
+const usuarioDemoId = "usuario-100";
+const RESERVAS_CACHE_KEY = "reservas-cache-v1";
+
+export async function guardarReservasEnCache(
+  reservasUsuario: Reserva[],
+): Promise<void> {
+  await Storage.setItem(RESERVAS_CACHE_KEY, JSON.stringify(reservasUsuario));
 }
 
-export async function obtenerReservasFijas(
-  espacioId?: string,
-): Promise<ReservaFija[]> {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  if (!espacioId) {
-    return reservasFijasMock;
+export async function obtenerReservasDesdeCache(): Promise<Reserva[] | null> {
+  const reservasGuardadas = await Storage.getItem(RESERVAS_CACHE_KEY);
+
+  if (!reservasGuardadas) {
+    return null;
   }
 
-  return reservasFijasMock.filter((reserva) => reserva.espacioId === espacioId);
+  try {
+    const reservasParseadas: unknown = JSON.parse(reservasGuardadas);
+    return Array.isArray(reservasParseadas)
+      ? (reservasParseadas as Reserva[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getTurnos(
+  espacioId: string,
+  fechaInicio: string,
+  fechaFin: string,
+): Promise<RespuestaApi<Turno>> {
+  const fechaInicioMs = new Date(fechaInicio).getTime();
+  const fechaFinMs = new Date(fechaFin).getTime();
+
+  const grilla = turnos.filter((turno) => {
+    if (turno.espacioId !== espacioId) {
+      return false;
+    }
+
+    const fechaTurnoMs = new Date(turno.fechaHoraInicio).getTime();
+    return fechaTurnoMs >= fechaInicioMs && fechaTurnoMs <= fechaFinMs;
+  });
+
+  return simularFetch(grilla, undefined, 500);
+}
+
+export async function getMisReservas(
+  usuarioId: string,
+): Promise<RespuestaApi<Reserva>> {
+  const misReservas = reservas.filter(
+    (reserva) => reserva.usuarioId === usuarioId,
+  );
+
+  return simularFetch(misReservas, undefined, 500);
 }
 
 export async function crearReserva(
-  payload: Partial<Reserva>,
-): Promise<Reserva> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  espacioId: string,
+  fechaHora: string,
+  cantidadJugadores: number,
+): Promise<RespuestaApi<Reserva>> {
+  const fechaHoraMs = new Date(fechaHora).getTime();
+  if (!Number.isFinite(fechaHoraMs) || fechaHoraMs <= Date.now()) {
+    return simularFetch([], {
+      codigo: "TURNO_NO_DISPONIBLE",
+      mensaje: "No se puede reservar un turno que ya pasó.",
+    });
+  }
 
-  const reserva: Reserva = {
-    id: `reserva_${Date.now()}`,
-    espacioId: payload.espacioId ?? "espacio_1",
-    usuarioId: payload.usuarioId ?? "user_jugador_1",
-    fecha: payload.fecha ?? "2026-09-20",
-    horaInicio: payload.horaInicio ?? "10:00",
-    horaFin: payload.horaFin ?? "11:00",
-    estado: payload.estado ?? "confirmada",
-    precio: payload.precio ?? 12000,
-    cantidadPersonas: payload.cantidadPersonas ?? 2,
-    qrCode: payload.qrCode ?? `qr_${Date.now()}`,
-    createdAt: new Date().toISOString(),
+  const reservasActivas = reservas.filter(
+    (reserva) =>
+      reserva.usuarioId === usuarioDemoId && reserva.estado === "activa",
+  );
+
+  if (reservasActivas.length >= 3) {
+    return simularFetch([], {
+      codigo: "MAXIMO_RESERVAS_ACTIVAS",
+      mensaje: "Ya alcanzaste el máximo de 3 reservas activas.",
+    });
+  }
+
+  const nuevaReserva: Reserva = {
+    id: `reserva-${Date.now()}`,
+    usuarioId: usuarioDemoId,
+    espacioId,
+    fechaHoraInicio: fechaHora,
+    cantidadJugadores,
+    estado: "activa",
+    qrCode: `qr-${Date.now()}`,
   };
 
-  reservasMock.push(reserva);
-  return reserva;
+  reservas.push(nuevaReserva);
+
+  return simularFetch([nuevaReserva], undefined, 500);
 }
 
-export async function cancelarReserva(id: string): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  const reserva = reservasMock.find((item) => item.id === id);
+export async function cancelarReserva(
+  reservaId: string,
+): Promise<RespuestaApi<Reserva>> {
+  const reserva = reservas.find((item) => item.id === reservaId);
 
   if (!reserva) {
-    return false;
+    return simularFetch([], {
+      codigo: "RESERVA_NO_ENCONTRADA",
+      mensaje: "La reserva no existe o ya fue eliminada.",
+    });
+  }
+
+  if (new Date(reserva.fechaHoraInicio).getTime() <= Date.now()) {
+    return simularFetch([], {
+      codigo: "RESERVA_YA_PASADA",
+      mensaje: "No se puede cancelar una reserva cuyo turno ya pasó.",
+    });
   }
 
   reserva.estado = "cancelada";
-  return true;
+
+  return simularFetch([reserva], undefined, 500);
 }

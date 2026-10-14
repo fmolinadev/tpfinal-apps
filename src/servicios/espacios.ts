@@ -1,19 +1,23 @@
-import { espaciosMock } from "@/mocks/espacios";
-import type { Espacio } from "@/tipos/espacio";
+import { espacios } from "@/mocks";
+import type { Espacio, RespuestaApi } from "@/tipos";
 
-export async function obtenerEspacios(): Promise<Espacio[]> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  return espaciosMock;
+import { simularFetch } from "./api";
+
+export async function getEspacios(): Promise<RespuestaApi<Espacio>> {
+  return simularFetch(espacios, undefined, 500);
 }
 
-export async function obtenerEspacio(id: string): Promise<Espacio | undefined> {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  return espaciosMock.find((espacio) => espacio.id === id);
-}
+export async function getEspacioById(
+  id: string,
+): Promise<RespuestaApi<Espacio>> {
+  const espacio = espacios.find((item) => item.id === id);
 
-export async function obtenerEspaciosPorDeporte(
-  deporte: string,
-): Promise<Espacio[]> {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  return espaciosMock.filter((espacio) => espacio.deporte === deporte);
+  if (!espacio) {
+    return simularFetch([], {
+      codigo: "ESPACIO_NO_ENCONTRADO",
+      mensaje: "No se encontró el espacio solicitado.",
+    });
+  }
+
+  return simularFetch([espacio], undefined, 500);
 }

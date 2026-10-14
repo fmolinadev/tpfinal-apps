@@ -2,13 +2,15 @@ import { useFocusEffect, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useCallback, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { getSessionToken } from "@/servicios/auth";
+import { getSessionToken, getSessionUser } from "@/servicios/auth";
+import type { RolUsuario } from "@/tipos/usuario";
 
 type AuthGuardProps = {
   children: ReactNode;
+  allowedRoles?: RolUsuario[];
 };
 
-export function AuthGuard({ children }: AuthGuardProps) {
+export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   const router = useRouter();
   const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
@@ -19,10 +21,39 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
       async function verifyAccess() {
         const token = await getSessionToken();
+        const user = await getSessionUser();
         const inJugadorRoute = segments[0] === "(jugador)";
+        const inStaffRoute = segments[0] === "(staff)";
 
-        if (inJugadorRoute && !token) {
+        if (!token || !user) {
           router.replace("/(auth)/login");
+          return;
+        }
+
+        if (allowedRoles && !allowedRoles.includes(user.rol ?? "jugador")) {
+          if (user.rol === "jugador") {
+            router.replace("/(jugador)/inicio");
+          } else if (user.rol === "administrador") {
+            router.replace("/(admin)/agenda");
+          } else if (user.rol === "encargado") {
+            router.replace("/(staff)/agenda");
+          } else {
+            router.replace("/(auth)/login");
+          }
+          return;
+        }
+
+        if (inJugadorRoute && user.rol !== "jugador") {
+          router.replace(
+            user.rol === "administrador"
+              ? "/(admin)/agenda"
+              : "/(staff)/agenda",
+          );
+          return;
+        }
+
+        if (inStaffRoute && user.rol === "jugador") {
+          router.replace("/(jugador)/inicio");
           return;
         }
 
@@ -36,7 +67,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
       return () => {
         active = false;
       };
-    }, [router, segments]),
+    }, [allowedRoles, router, segments]),
   );
 
   if (!isReady) {
