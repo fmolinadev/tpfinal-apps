@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import * as SplashScreenModule from "expo-splash-screen";
 import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 export default function AppSplashScreen() {
   const router = useRouter();
@@ -10,14 +10,21 @@ export default function AppSplashScreen() {
     const timeout = setTimeout(async () => {
       await SplashScreenModule.hideAsync();
       router.replace("/(auth)/login");
-    }, 1200);
+    }, 1800);
 
     return () => clearTimeout(timeout);
   }, [router]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Final Integrador</Text>
+      <View style={styles.logoWrap}>
+        <Image
+          source={require("@/assets/images/logo_complejo_villaguay_blanco.png")}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityLabel="Logo de Villaguay Deportes"
+        />
+      </View>
     </View>
   );
 }
@@ -30,10 +37,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#ffffff",
-    letterSpacing: 1,
+  logoWrap: {
+    flex: 1,
+    height: 90,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 12,
+  },
+  logo: {
+    width: 572,
+    height: 90,
   },
 });

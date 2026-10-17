@@ -229,6 +229,7 @@ export default function DisponibilidadEspacioScreen() {
       }
 
       const respuesta = await crearReserva(
+        usuario.id,
         turnoSeleccionado.espacioId,
         turnoSeleccionado.fechaHoraInicio,
         cantidad,

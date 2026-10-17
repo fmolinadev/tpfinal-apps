@@ -47,7 +47,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Image
-          source={require("@/assets/images/villaguay_logo.png")}
+          source={require("@/assets/images/logo_complejo_villaguay.png")}
           style={styles.logo}
           resizeMode="contain"
         />

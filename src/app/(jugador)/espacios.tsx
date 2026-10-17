@@ -3,16 +3,20 @@ import { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Image,
+    Modal,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
+import { getCurrentUserSession } from "@/persistencia/session";
 import { getEspacios } from "@/servicios/espacios";
-import { getTurnos } from "@/servicios/reservas";
+import { programarRecordatorioTurno } from "@/servicios/notificaciones";
+import { crearReserva, getTurnos } from "@/servicios/reservas";
 import type { Espacio, Turno } from "@/tipos";
 
 type Vista = "espacios" | "disponibilidad";
@@ -66,6 +70,12 @@ export default function EspaciosScreen() {
   const [horarios, setHorarios] = useState<HorarioDisponible[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
+  const [turnoSeleccionado, setTurnoSeleccionado] =
+    useState<HorarioDisponible | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [cantidadJugadores, setCantidadJugadores] = useState("1");
+  const [reservando, setReservando] = useState(false);
+  const [mensajeReserva, setMensajeReserva] = useState<string | null>(null);
 
   useEffect(() => {
     getEspacios().then((respuesta) => {
@@ -135,6 +145,62 @@ export default function EspaciosScreen() {
   const horariosFiltrados = horarios.filter(
     ({ espacio }) => disciplina === "todas" || espacio.deporte === disciplina,
   );
+
+  function seleccionarTurno(horario: HorarioDisponible) {
+    setTurnoSeleccionado(horario);
+    setCantidadJugadores("1");
+    setMensajeReserva(null);
+    setModalVisible(true);
+  }
+
+  async function confirmarReserva() {
+    if (!turnoSeleccionado || reservando) return;
+
+    const cantidad = Number.parseInt(cantidadJugadores, 10);
+    if (!Number.isInteger(cantidad) || cantidad < 1) {
+      setMensajeReserva("Ingresá una cantidad de jugadores válida.");
+      return;
+    }
+
+    setReservando(true);
+    setMensajeReserva(null);
+
+    try {
+      const usuario = await getCurrentUserSession();
+      if (!usuario) {
+        setMensajeReserva("La sesión expiró. Volvé a iniciar sesión.");
+        return;
+      }
+
+      const respuesta = await crearReserva(
+        usuario.id,
+        turnoSeleccionado.espacio.id,
+        turnoSeleccionado.turno.fechaHoraInicio,
+        cantidad,
+      );
+
+      if ("error" in respuesta && respuesta.error) {
+        setMensajeReserva(respuesta.error.mensaje);
+        return;
+      }
+
+      const reserva = respuesta.datos[0];
+      await programarRecordatorioTurno(
+        reserva.id,
+        reserva.fechaHoraInicio,
+        turnoSeleccionado.espacio.nombre,
+      );
+
+      setModalVisible(false);
+      router.replace("/(tabs)/reservas");
+    } catch (err) {
+      setMensajeReserva(
+        err instanceof Error ? err.message : "No se pudo confirmar la reserva.",
+      );
+    } finally {
+      setReservando(false);
+    }
+  }
 
   if (loading)
     return (
@@ -284,12 +350,7 @@ export default function EspaciosScreen() {
               <Pressable
                 key={`${espacio.id}-${turno.id}`}
                 style={styles.availabilityCard}
-                onPress={() =>
-                  router.push({
-                    pathname: "/espacio/[id]/disponibilidad",
-                    params: { id: espacio.id },
-                  })
-                }
+                onPress={() => seleccionarTurno({ espacio, turno })}
               >
                 <View>
                   <Text style={styles.cardTitle}>
@@ -310,6 +371,76 @@ export default function EspaciosScreen() {
           )}
         </>
       )}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirmar reserva</Text>
+            <Text style={styles.modalQuestion}>¿Cuántos van a ser?</Text>
+            <TextInput
+              value={cantidadJugadores}
+              onChangeText={setCantidadJugadores}
+              keyboardType="number-pad"
+              maxLength={2}
+              selectTextOnFocus
+              style={styles.input}
+              placeholder="Cantidad"
+              placeholderTextColor={Colors.light.textSecondary}
+              accessibilityLabel="Cantidad de jugadores"
+            />
+
+            {turnoSeleccionado && (
+              <View style={styles.summary}>
+                <Text style={styles.summaryTitle}>Resumen</Text>
+                <Text style={styles.summaryText}>
+                  Espacio: {turnoSeleccionado.espacio.nombre}
+                </Text>
+                <Text style={styles.summaryText}>
+                  Fecha:{" "}
+                  {formatearFecha(
+                    new Date(turnoSeleccionado.turno.fechaHoraInicio),
+                  )}
+                </Text>
+                <Text style={styles.summaryText}>
+                  Hora: {formatearHora(turnoSeleccionado.turno.fechaHoraInicio)}
+                </Text>
+                <Text style={styles.summaryText}>
+                  Precio a pagar en el lugar: ${" "}
+                  {turnoSeleccionado.turno.precio.toLocaleString("es-AR")}
+                </Text>
+              </View>
+            )}
+
+            {mensajeReserva && (
+              <Text style={styles.errorText}>{mensajeReserva}</Text>
+            )}
+
+            <Pressable
+              style={[
+                styles.confirmButton,
+                reservando && styles.disabledButton,
+              ]}
+              disabled={reservando}
+              onPress={confirmarReserva}
+            >
+              <Text style={styles.confirmButtonText}>
+                {reservando ? "Cargando..." : "[ CONFIRMAR RESERVA ]"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.cancelButton}
+              disabled={reservando}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>[ Cancelar ]</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -451,4 +582,75 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   availabilityRight: { alignItems: "flex-end" },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+  },
+  modalCard: {
+    gap: 12,
+    padding: 22,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.light.backgroundSelected,
+    backgroundColor: Colors.light.backgroundElement,
+  },
+  modalTitle: {
+    color: Colors.light.text,
+    fontSize: 22,
+    fontWeight: "800",
+    fontFamily: Fonts.sans,
+  },
+  modalQuestion: {
+    color: Colors.light.text,
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: Fonts.sans,
+  },
+  input: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.backgroundSelected,
+    borderRadius: 10,
+    backgroundColor: Colors.light.background,
+    color: Colors.light.text,
+    fontSize: 18,
+    fontFamily: Fonts.sans,
+  },
+  summary: {
+    gap: 5,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.light.background,
+  },
+  summaryTitle: {
+    color: Colors.light.text,
+    fontWeight: "800",
+    fontFamily: Fonts.sans,
+  },
+  summaryText: { color: Colors.light.text, fontFamily: Fonts.sans },
+  errorText: {
+    color: "#b91c1c",
+    fontWeight: "700",
+    fontFamily: Fonts.sans,
+  },
+  confirmButton: {
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.light.backgroundSelected,
+  },
+  confirmButtonText: {
+    color: Colors.light.background,
+    fontWeight: "800",
+    fontFamily: Fonts.sans,
+  },
+  disabledButton: { opacity: 0.6 },
+  cancelButton: { alignItems: "center", padding: 10 },
+  cancelButtonText: {
+    color: Colors.light.textSecondary,
+    fontWeight: "700",
+    fontFamily: Fonts.sans,
+  },
 });

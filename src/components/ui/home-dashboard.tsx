@@ -1,18 +1,18 @@
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useColorScheme,
+    View,
 } from "react-native";
 
 import {
-  RoleTabIcon,
-  type RoleTabIconName,
+    RoleTabIcon,
+    type RoleTabIconName,
 } from "@/components/ui/role-tab-icon";
 import { Colors, Fonts } from "@/constants/theme";
 import { getCurrentUserSession } from "@/persistencia/session";
@@ -26,7 +26,6 @@ export type DashboardItem = {
 };
 
 type HomeDashboardProps = {
-  eyebrow: string;
   title: string;
   description: string;
   profileHref: Href;
@@ -50,7 +49,6 @@ function getFirstName(name: string | undefined, fallback: string): string {
 }
 
 export function HomeDashboard({
-  eyebrow,
   title,
   description,
   profileHref,
@@ -66,7 +64,7 @@ export function HomeDashboard({
         screen: { flex: 1, backgroundColor: palette.backgroundElement },
         content: { paddingBottom: 28 },
         topBar: {
-          minHeight: 72,
+          minHeight: 80,
           paddingHorizontal: 20,
           flexDirection: "row",
           alignItems: "center",
@@ -76,16 +74,14 @@ export function HomeDashboard({
         topBarSide: { width: 44, alignItems: "flex-start" },
         logoWrap: {
           flex: 1,
-          height: 48,
+          height: 60,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: Colors.light.background,
-          borderRadius: 12,
           marginHorizontal: 12,
         },
         logo: {
-          width: 172,
-          height: 40,
+          width: 572,
+          height: 60,
         },
         profileButton: {
           width: 42,
@@ -94,6 +90,8 @@ export function HomeDashboard({
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: palette.textSecondary,
+          borderWidth: 1.5,
+          borderColor: palette.backgroundElement,
         },
         profileInitials: {
           color: Colors.light.background,
@@ -103,13 +101,6 @@ export function HomeDashboard({
         },
         main: { paddingHorizontal: 20, paddingTop: 24, gap: 20 },
         intro: { gap: 6 },
-        eyebrow: {
-          color: palette.textSecondary,
-          fontSize: 11,
-          fontWeight: "800",
-          letterSpacing: 1.25,
-          fontFamily: Fonts.sans,
-        },
         heading: {
           color: palette.text,
           fontSize: 28,
@@ -223,7 +214,7 @@ export function HomeDashboard({
         <View style={styles.topBarSide} />
         <View style={styles.logoWrap}>
           <Image
-            source={require("@/assets/images/villaguay_logo.png")}
+            source={require("@/assets/images/logo_complejo_villaguay_blanco.png")}
             style={styles.logo}
             resizeMode="contain"
             accessibilityLabel="Logo de Villaguay Deportes"
@@ -243,7 +234,6 @@ export function HomeDashboard({
 
       <View style={styles.main}>
         <View style={styles.intro}>
-          <Text style={styles.eyebrow}>{eyebrow}</Text>
           <Text style={styles.heading}>
             {title}, {nombre}
           </Text>

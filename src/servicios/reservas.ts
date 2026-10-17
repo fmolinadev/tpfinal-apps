@@ -4,8 +4,8 @@ import Storage from "expo-sqlite/kv-store";
 
 import { simularFetch } from "./api";
 
-const usuarioDemoId = "usuario-100";
 const RESERVAS_CACHE_KEY = "reservas-cache-v1";
+const DURACION_TURNO_MS = 60 * 60 * 1000;
 
 export async function guardarReservasEnCache(
   reservasUsuario: Reserva[],
@@ -61,6 +61,7 @@ export async function getMisReservas(
 }
 
 export async function crearReserva(
+  usuarioId: string,
   espacioId: string,
   fechaHora: string,
   cantidadJugadores: number,
@@ -75,7 +76,7 @@ export async function crearReserva(
 
   const reservasActivas = reservas.filter(
     (reserva) =>
-      reserva.usuarioId === usuarioDemoId && reserva.estado === "activa",
+      reserva.usuarioId === usuarioId && reserva.estado === "activa",
   );
 
   if (reservasActivas.length >= 3) {
@@ -87,7 +88,7 @@ export async function crearReserva(
 
   const nuevaReserva: Reserva = {
     id: `reserva-${Date.now()}`,
-    usuarioId: usuarioDemoId,
+    usuarioId,
     espacioId,
     fechaHoraInicio: fechaHora,
     cantidadJugadores,
@@ -98,6 +99,33 @@ export async function crearReserva(
   reservas.push(nuevaReserva);
 
   return simularFetch([nuevaReserva], undefined, 500);
+}
+
+export async function validarAccesoPorQrEspacio(
+  espacioId: string,
+  usuarioId: string,
+  ahora = Date.now(),
+): Promise<RespuestaApi<Reserva>> {
+  const reserva = reservas.find((item) => {
+    const inicio = new Date(item.fechaHoraInicio).getTime();
+    return (
+      item.usuarioId === usuarioId &&
+      item.espacioId === espacioId &&
+      item.estado === "activa" &&
+      inicio <= ahora &&
+      ahora < inicio + DURACION_TURNO_MS
+    );
+  });
+
+  if (!reserva) {
+    return simularFetch([], {
+      codigo: "RESERVA_PROPIA_NO_VIGENTE",
+      mensaje:
+        "No encontramos una reserva propia activa para este espacio y horario.",
+    });
+  }
+
+  return simularFetch([reserva]);
 }
 
 export async function cancelarReserva(

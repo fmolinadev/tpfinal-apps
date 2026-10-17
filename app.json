@@ -22,7 +22,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icono-splash.png"
     },
     "plugins": [
       "expo-router",
@@ -30,7 +30,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#a55890",
-          "image": "./assets/images/villaguay_splash_icon.png",
+          "image": "./assets/images/icono-splash.png",
           "imageWidth": 180
         }
       ],
