@@ -281,3 +281,69 @@ Los recursos visuales de la marca están en `assets/images/`. El splash configur
 5. Alinear el flujo de restauración de sesión y biometría con la pantalla inicial.
 6. Incorporar pruebas para disponibilidad, solapamientos, reservas, límites de cancelación y roles.
 7. Configurar ESLint y automatizaciones de validación.
+
+## Matriz de pruebas manuales
+
+La siguiente matriz permite verificar los principales recorridos de la aplicación desde el perfil de jugador. Las pruebas deben ejecutarse en la aplicación y registrar el resultado obtenido.
+
+- **Prueba 1** : Inicio de sesión
+
+Acción: ingresar con una cuenta de jugador válida.
+
+Resultado esperado: acceder al inicio del jugador.
+
+- **Prueba 2**: Catálogo de espacios
+
+Acción: consultar los espacios deportivos disponibles.
+
+Resultado esperado: visualizar los espacios y sus características.
+
+- **Prueba 3**: Disponibilidad
+
+Acción: seleccionar un espacio y una fecha.
+
+Resultado esperado: mostrar los horarios correspondientes.
+
+- **Prueba 4**: Turnos vencidos
+
+Acción: consultar horarios que ya comenzaron.
+
+Resultado esperado: no permitir seleccionar esos horarios.
+
+- **Prueba 5**: Crear reserva
+
+Acción: seleccionar un turno libre y confirmar la cantidad de jugadores.
+
+Resultado esperado: registrar la reserva.
+
+- **Prueba 6**: Límite de reservas
+
+Acción: intentar superar el máximo de tres reservas activas.
+
+Resultado esperado: rechazar la operación.
+
+- **Prueba 7**: Cancelación
+
+Acción: intentar cancelar una reserva futura con más de cuatro horas de anticipación.
+
+Resultado esperado: permitir la cancelación.
+
+- **Prueba 8**: Cancelación fuera de plazo
+
+Acción: intentar cancelar una reserva con cuatro horas o menos de anticipación.
+
+Resultado esperado: informar que debe contactarse con el complejo.
+
+- **Prueba 9**: Recordatorios
+
+Acción: confirmar una reserva con permisos de notificaciones habilitados.
+
+Resultado esperado: programar un recordatorio local, si el dispositivo lo permite.
+
+- **Prueba 10**: Consulta de reservas
+
+Acción: ingresar a la sección de reservas.
+
+Resultado esperado: mostrar las reservas correspondientes al usuario.
+
+- *Registro de resultados*: cada prueba debe marcarse como aprobada fallida o pendiente luego de ejecutarse. Esta matriz documenta los escenarios previstos y no implica que todos hayan sido verificados.
