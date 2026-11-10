@@ -1,11 +1,19 @@
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 
-import { usuariosMock } from "@/mocks/usuarios";
+import { apiPost } from "@/servicios/api";
 import type { LoginInput, RegistroInput, Usuario } from "@/tipos/usuario";
 
 export const SESSION_TOKEN_KEY = "app_session_token";
 export const SESSION_USER_KEY = "app_session_user";
+
+type RespuestaSesion = {
+  datos: {
+    token: string;
+    usuario: Usuario;
+  };
+  meta: null;
+};
 
 export async function saveSessionToken(token: string): Promise<void> {
   await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
@@ -26,9 +34,7 @@ export async function saveSessionUser(usuario: Usuario): Promise<void> {
 export async function getSessionUser(): Promise<Usuario | null> {
   const raw = await SecureStore.getItemAsync(SESSION_USER_KEY);
 
-  if (!raw) {
-    return null;
-  }
+  if (!raw) return null;
 
   try {
     return JSON.parse(raw) as Usuario;
@@ -41,45 +47,25 @@ export async function clearSessionUser(): Promise<void> {
   await SecureStore.deleteItemAsync(SESSION_USER_KEY);
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function loginUsuario({
   email,
   password,
 }: LoginInput): Promise<{ token: string; usuario: Usuario }> {
-  if (!email || !password) {
+  if (!email.trim() || !password) {
     throw new Error("Email y contraseña son obligatorios.");
   }
 
-  await delay(400);
+  const respuesta = await apiPost<RespuestaSesion>("/auth/ingreso", {
+    email: email.trim(),
+    contrasena: password,
+  });
 
-  const usuario = usuariosMock.find(
-    (item) =>
-      item.email.trim().toLowerCase() === email.trim().toLowerCase() &&
-      item.password === password,
-  );
+  const { token, usuario } = respuesta.datos;
 
-  if (!usuario) {
-    throw new Error(
-      "Credenciales inválidas. Prueba con demo@tpfinal.com / 123456",
-    );
-  }
-
-  const safeUser: Usuario = {
-    id: usuario.id,
-    nombre: usuario.nombre,
-    email: usuario.email,
-    telefono: usuario.telefono,
-    rol: usuario.rol,
-  };
-
-  const token = `mock_token_${usuario.id}_${Date.now()}`;
   await saveSessionToken(token);
-  await saveSessionUser(safeUser);
+  await saveSessionUser(usuario);
 
-  return { token, usuario: safeUser };
+  return { token, usuario };
 }
 
 export async function registrarUsuario({
@@ -88,61 +74,36 @@ export async function registrarUsuario({
   telefono,
   password,
 }: RegistroInput): Promise<{ token: string; usuario: Usuario }> {
-  if (!nombre || !email || !telefono || !password) {
+  if (!nombre.trim() || !email.trim() || !telefono.trim() || !password) {
     throw new Error("Todos los campos son obligatorios.");
   }
 
-  await delay(400);
-
-  const usuarioExistente = usuariosMock.some(
-    (item) => item.email.trim().toLowerCase() === email.trim().toLowerCase(),
-  );
-
-  if (usuarioExistente) {
-    throw new Error("Ya existe un usuario con ese email.");
-  }
-
-  const nuevoUsuario: Usuario = {
-    id: `user_${Date.now()}`,
+  const respuesta = await apiPost<RespuestaSesion>("/auth/registro", {
     nombre: nombre.trim(),
     email: email.trim(),
     telefono: telefono.trim(),
-    password,
-    rol: "jugador",
-  };
+    contrasena: password,
+  });
 
-  usuariosMock.push(nuevoUsuario);
-
-  const token = `mock_token_${nuevoUsuario.id}_${Date.now()}`;
-  const usuarioPersistido: Usuario = {
-    id: nuevoUsuario.id,
-    nombre: nuevoUsuario.nombre,
-    email: nuevoUsuario.email,
-    telefono: nuevoUsuario.telefono,
-    rol: nuevoUsuario.rol,
-  };
+  const { token, usuario } = respuesta.datos;
 
   await saveSessionToken(token);
-  await saveSessionUser(usuarioPersistido);
+  await saveSessionUser(usuario);
 
-  return {
-    token,
-    usuario: usuarioPersistido,
-  };
+  return { token, usuario };
 }
 
 export async function isBiometricSupported(): Promise<boolean> {
   const compatible = await LocalAuthentication.hasHardwareAsync();
   const enrolled = await LocalAuthentication.isEnrolledAsync();
+
   return compatible && enrolled;
 }
 
 export async function authenticateWithBiometrics(): Promise<boolean> {
   const supported = await isBiometricSupported();
 
-  if (!supported) {
-    return false;
-  }
+  if (!supported) return false;
 
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage: "Autenticación biométrica requerida",
