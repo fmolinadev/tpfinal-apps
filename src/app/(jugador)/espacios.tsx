@@ -173,10 +173,8 @@ export default function EspaciosScreen() {
       }
 
       const respuesta = await crearReserva(
-        usuario.id,
-        turnoSeleccionado.espacio.id,
-        turnoSeleccionado.turno.fechaHoraInicio,
-        cantidad,
+      turnoSeleccionado.turno.id,
+      cantidad,
       );
 
       if ("error" in respuesta && respuesta.error) {

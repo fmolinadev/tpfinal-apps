@@ -1,25 +1,41 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
-import { espacios, reservas, turnos } from "@/mocks";
-import {
-    actualizarPrecio,
-    bloquearTurno,
-    marcarAsistencia,
-} from "@/servicios/admin";
-import type { Reserva, Turno } from "@/tipos";
-import { useRouter } from "expo-router";
+import { apiGet, apiPost } from "@/servicios/api";
+import { actualizarPrecio } from "@/servicios/admin-precios";
+import { crearBloqueo } from "@/servicios/admin-bloqueos";
+
+type TurnoAgenda = {
+  id: string;
+  espacioId: string;
+  fecha: string;
+  inicio: string;
+  fin: string;
+  estado: "libre" | "reservado" | "fijo" | "mantenimiento";
+  reservaId: string | null;
+  motivoBloqueo: string | null;
+  precio: number;
+};
+
+type RespuestaLista<T> = {
+  datos: T[];
+  meta: {
+    total: number;
+    pagina: number;
+    porPagina: number;
+  };
+};
 
 function claveFecha(fecha: Date): string {
   const year = fecha.getFullYear();
@@ -28,75 +44,77 @@ function claveFecha(fecha: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function formatearHora(fechaIso: string): string {
-  return new Date(fechaIso).toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function nombreEspacio(espacioId: string): string {
-  return espacios.find((item) => item.id === espacioId)?.nombre ?? espacioId;
-}
-
-function reservaParaTurno(turno: Turno): Reserva | undefined {
-  return reservas.find(
-    (reserva) =>
-      reserva.espacioId === turno.espacioId &&
-      new Date(reserva.fechaHoraInicio).getTime() ===
-        new Date(turno.fechaHoraInicio).getTime(),
-  );
-}
-
 export default function AgendaAdminScreen() {
-  const router = useRouter();
-  const [turnosDelDia, setTurnosDelDia] = useState<Turno[]>([]);
+  const [turnosDelDia, setTurnosDelDia] = useState<TurnoAgenda[]>([]);
   const [loading, setLoading] = useState(true);
+  const [procesando, setProcesando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
-  const [turnoSeleccionado, setTurnoSeleccionado] = useState<Turno | null>(
-    null,
-  );
+
+  const [turnoSeleccionado, setTurnoSeleccionado] =
+    useState<TurnoAgenda | null>(null);
+
   const [modal, setModal] = useState<"precio" | "bloqueo" | null>(null);
   const [precio, setPrecio] = useState("");
   const [motivo, setMotivo] = useState("");
 
-  useEffect(() => {
-    const hoy = claveFecha(new Date());
-    setTurnosDelDia(
-      turnos
-        .filter((turno) => claveFecha(new Date(turno.fechaHoraInicio)) === hoy)
-        .sort(
-          (a, b) =>
-            new Date(a.fechaHoraInicio).getTime() -
-            new Date(b.fechaHoraInicio).getTime(),
-        ),
-    );
-    setLoading(false);
-  }, []);
+  const hoy = claveFecha(new Date());
 
-  const turnosOrdenados = useMemo(() => turnosDelDia, [turnosDelDia]);
+  const cargarAgenda = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const respuesta = await apiGet<RespuestaLista<TurnoAgenda>>(
+        `/agenda?fecha=${hoy}&porPagina=500`,
+      );
+
+      const ordenados = [...respuesta.datos].sort((a, b) =>
+        a.inicio.localeCompare(b.inicio),
+      );
+
+      setTurnosDelDia(ordenados);
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar la agenda.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [hoy]);
+
+  useEffect(() => {
+    void cargarAgenda();
+  }, [cargarAgenda]);
 
   async function cambiarPrecio() {
     if (!turnoSeleccionado) return;
-    const nuevoPrecio = Number(precio);
-    const respuesta = await actualizarPrecio(
-      turnoSeleccionado.espacioId,
-      nuevoPrecio,
-    );
-    if ("error" in respuesta && respuesta.error) {
-      setMensaje(respuesta.error.mensaje);
-    } else {
-      setTurnosDelDia((actuales) =>
-        actuales.map((turno) =>
-          turno.espacioId === turnoSeleccionado.espacioId &&
-          turno.estado === "libre"
-            ? { ...turno, precio: nuevoPrecio }
-            : turno,
-        ),
+
+    const nuevoPrecio = Number(precio.replace(",", "."));
+
+    if (!Number.isInteger(nuevoPrecio) || nuevoPrecio < 1) {
+      setMensaje("Ingresá un precio entero mayor que cero.");
+      return;
+    }
+
+    setProcesando(true);
+
+    try {
+      const respuesta = await actualizarPrecio(
+        turnoSeleccionado.espacioId,
+        nuevoPrecio,
       );
-      setMensaje("Precio actualizado.");
+
+      if (!respuesta.ok) {
+        setMensaje(respuesta.mensaje);
+        return;
+      }
+
+      setMensaje(respuesta.mensaje);
       setModal(null);
+      await cargarAgenda();
+    } finally {
+      setProcesando(false);
     }
   }
 
@@ -105,37 +123,49 @@ export default function AgendaAdminScreen() {
       setMensaje("Ingresá un motivo para bloquear el turno.");
       return;
     }
-    const respuesta = await bloquearTurno(
-      turnoSeleccionado.espacioId,
-      turnoSeleccionado.fechaHoraInicio,
-      motivo.trim(),
-    );
-    if ("error" in respuesta && respuesta.error) {
-      setMensaje(respuesta.error.mensaje);
-    } else {
-      setTurnosDelDia((actuales) =>
-        actuales.map((turno) =>
-          turno.id === turnoSeleccionado.id
-            ? { ...turno, estado: "mantenimiento" }
-            : turno,
-        ),
-      );
-      setMensaje(`Turno bloqueado: ${motivo.trim()}`);
+
+    setProcesando(true);
+
+    try {
+      await crearBloqueo({
+        espacioIds: [turnoSeleccionado.espacioId],
+        fecha: turnoSeleccionado.fecha,
+        inicio: turnoSeleccionado.inicio,
+        fin: turnoSeleccionado.fin,
+        motivo: motivo.trim(),
+      });
+
+      setMensaje("El turno fue bloqueado correctamente.");
       setModal(null);
+      await cargarAgenda();
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudo bloquear el turno.",
+      );
+    } finally {
+      setProcesando(false);
     }
   }
 
-  async function asistencia(reserva: Reserva, estado: "presente" | "ausente") {
-    const respuesta = await marcarAsistencia(reserva.id, estado);
-    if ("error" in respuesta && respuesta.error) {
-      setMensaje(respuesta.error.mensaje);
-      return;
+  async function marcarAusente(reservaId: string) {
+    setProcesando(true);
+
+    try {
+      await apiPost(`/reservas/${reservaId}/ausente`);
+
+      setMensaje("La ausencia fue registrada correctamente.");
+      await cargarAgenda();
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudo registrar la ausencia.",
+      );
+    } finally {
+      setProcesando(false);
     }
-    setMensaje(
-      estado === "presente"
-        ? "Asistencia marcada: Presente."
-        : "Asistencia marcada: Ausente.",
-    );
   }
 
   return (
@@ -143,14 +173,19 @@ export default function AgendaAdminScreen() {
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>Agenda del día</Text>
+
           <Text style={styles.dateText}>
             {new Date().toLocaleDateString("es-AR")}
           </Text>
+
           <Text style={styles.helperText}>
             Portal exclusivo del administrador.
           </Text>
 
-          {mensaje && <Text style={styles.message}>{mensaje}</Text>}
+          {mensaje && (
+            <Text style={styles.message}>{mensaje}</Text>
+          )}
+
           {loading ? (
             <View style={styles.centered}>
               <ActivityIndicator
@@ -159,77 +194,90 @@ export default function AgendaAdminScreen() {
               />
               <Text style={styles.bodyText}>Cargando agenda...</Text>
             </View>
-          ) : turnosOrdenados.length === 0 ? (
+          ) : turnosDelDia.length === 0 ? (
             <Text style={styles.bodyText}>
               No hay turnos cargados para hoy.
             </Text>
           ) : (
-            turnosOrdenados.map((turno) => {
-              const reserva = reservaParaTurno(turno);
-              return (
-                <View key={turno.id} style={styles.card}>
-                  <Text style={styles.cardTitle}>
-                    {nombreEspacio(turno.espacioId)}
-                  </Text>
-                  <Text style={styles.cardTime}>
-                    {formatearHora(turno.fechaHoraInicio)}
-                  </Text>
-                  <Text style={styles.cardStatus}>
-                    Estado: {turno.estado.toUpperCase()}
-                  </Text>
+            turnosDelDia.map((turno) => (
+              <View key={turno.id} style={styles.card}>
+                <Text style={styles.cardTitle}>
+                  Espacio: {turno.espacioId}
+                </Text>
+
+                <Text style={styles.cardTime}>
+                  {turno.inicio} - {turno.fin}
+                </Text>
+
+                <Text style={styles.cardStatus}>
+                  Estado: {turno.estado.toUpperCase()}
+                </Text>
+
+                <Text style={styles.cardText}>
+                  Precio: $ {turno.precio.toLocaleString("es-AR")}
+                </Text>
+
+                {turno.motivoBloqueo && (
                   <Text style={styles.cardText}>
-                    Precio: $ {turno.precio.toLocaleString("es-AR")}
+                    Motivo del bloqueo: {turno.motivoBloqueo}
                   </Text>
+                )}
 
-                  {reserva && (
-                    <View style={styles.actionGroup}>
-                      <Text style={styles.cardText}>Reserva: {reserva.id}</Text>
-                      <View style={styles.actionRow}>
-                        <Pressable
-                          style={styles.actionButton}
-                          onPress={() => void asistencia(reserva, "presente")}
-                        >
-                          <Text style={styles.actionText}>[ Presente ]</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.actionButton}
-                          onPress={() => void asistencia(reserva, "ausente")}
-                        >
-                          <Text style={styles.actionText}>
-                            [ No se presentó ]
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
+                {turno.reservaId && (
+                  <View style={styles.actionGroup}>
+                    <Text style={styles.cardText}>
+                      Reserva: {turno.reservaId}
+                    </Text>
 
-                  <View style={styles.actionRow}>
                     <Pressable
                       style={styles.actionButton}
-                      onPress={() => {
-                        setTurnoSeleccionado(turno);
-                        setPrecio(String(turno.precio));
-                        setModal("precio");
-                      }}
-                    >
-                      <Text style={styles.actionText}>[ Cambiar Precio ]</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.actionButton}
-                      onPress={() => {
-                        setTurnoSeleccionado(turno);
-                        setMotivo("");
-                        setModal("bloqueo");
-                      }}
+                      disabled={procesando}
+                      onPress={() => void marcarAusente(turno.reservaId!)}
                     >
                       <Text style={styles.actionText}>
-                        [ Bloquear Turno / Día ]
+                        [ Registrar ausencia ]
                       </Text>
                     </Pressable>
+
+                    <Text style={styles.helperText}>
+                      El ingreso como presente se registra mediante el
+                      escaneo del código QR.
+                    </Text>
                   </View>
+                )}
+
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={styles.actionButton}
+                    onPress={() => {
+                      setTurnoSeleccionado(turno);
+                      setPrecio(String(turno.precio));
+                      setMensaje(null);
+                      setModal("precio");
+                    }}
+                  >
+                    <Text style={styles.actionText}>
+                      [ Cambiar precio ]
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.actionButton}
+                    disabled={turno.estado === "mantenimiento"}
+                    onPress={() => {
+                      setTurnoSeleccionado(turno);
+                      setMotivo("");
+                      setMensaje(null);
+                      setModal("bloqueo");
+                    }}
+                  >
+                    <Text style={styles.actionText}>
+                      [ Bloquear turno ]
+                    </Text>
+                  </Pressable>
                 </View>
-              );
-            })
+              </View>
+            ))
           )}
         </ScrollView>
 
@@ -242,8 +290,11 @@ export default function AgendaAdminScreen() {
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>
-                {modal === "precio" ? "Cambiar precio" : "Bloquear turno / día"}
+                {modal === "precio"
+                  ? "Cambiar precio"
+                  : "Bloquear turno"}
               </Text>
+
               {modal === "precio" ? (
                 <TextInput
                   value={precio}
@@ -263,16 +314,24 @@ export default function AgendaAdminScreen() {
                   multiline
                 />
               )}
+
               <Pressable
                 style={styles.confirmButton}
+                disabled={procesando}
                 onPress={() =>
                   void (modal === "precio" ? cambiarPrecio() : bloquear())
                 }
               >
-                <Text style={styles.confirmText}>[ Confirmar ]</Text>
+                {procesando ? (
+                  <ActivityIndicator color={Colors.light.background} />
+                ) : (
+                  <Text style={styles.confirmText}>[ Confirmar ]</Text>
+                )}
               </Pressable>
+
               <Pressable
                 style={styles.cancelButton}
+                disabled={procesando}
                 onPress={() => setModal(null)}
               >
                 <Text style={styles.cancelText}>[ Cancelar ]</Text>
@@ -362,7 +421,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
   },
-  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
   actionButton: {
     borderWidth: 1,
     borderColor: Colors.light.backgroundSelected,

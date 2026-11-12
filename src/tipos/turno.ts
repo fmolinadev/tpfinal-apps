@@ -1,4 +1,9 @@
-export type EstadoTurno = "libre" | "ocupado" | "mantenimiento" | "fijo";
+export type EstadoTurno =
+  | "libre"
+  | "ocupado"
+  | "reservado"
+  | "mantenimiento"
+  | "fijo";
 
 export type Turno = {
   id: string;

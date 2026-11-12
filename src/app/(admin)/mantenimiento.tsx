@@ -1,79 +1,508 @@
-import { useState } from "react";
-import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+ import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import { AuthGuard } from "@/components/auth-guard";
-import { Colors, Fonts } from "@/constants/theme";
-import { espacios } from "@/mocks";
-import { actualizarMantenimiento, crearMantenimiento, eliminarMantenimiento } from "@/servicios/admin";
-import { mantenimientosMock } from "@/mocks/turnos";
-import type { Mantenimiento } from "@/tipos/turno";
+import {
+  crearBloqueo,
+  eliminarBloqueo,
+  listarBloqueos,
+  type Bloqueo,
+} from "@/servicios/admin-bloqueos";
+import { getEspacios } from "@/servicios/espacios";
+import type { Espacio } from "@/tipos";
 
-const formularioInicial = { espacioId: "espacio-1", fecha: "2026-09-20", horaInicio: "09:00", horaFin: "10:00", motivo: "", activo: true };
+function fechaLocal(): string {
+  const fecha = new Date();
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dia = String(fecha.getDate()).padStart(2, "0");
 
-type FormularioMantenimiento = typeof formularioInicial;
+  return `${anio}-${mes}-${dia}`;
+}
+
+type Formulario = {
+  espacioId: string;
+  fecha: string;
+  inicio: string;
+  fin: string;
+  motivo: string;
+};
+
+const formularioInicial: Formulario = {
+  espacioId: "",
+  fecha: fechaLocal(),
+  inicio: "09:00",
+  fin: "10:00",
+  motivo: "",
+};
 
 export default function MantenimientoAdminScreen() {
   const router = useRouter();
-  const [mantenimientos, setMantenimientos] = useState<Mantenimiento[]>([...mantenimientosMock]);
-  const [formulario, setFormulario] = useState<FormularioMantenimiento>(formularioInicial);
-  const [editando, setEditando] = useState<string | null>(null);
+
+  const [espacios, setEspacios] = useState<Espacio[]>([]);
+  const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
+  const [formulario, setFormulario] =
+    useState<Formulario>(formularioInicial);
+  const [diaCompleto, setDiaCompleto] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  function actualizarCampo(campo: keyof FormularioMantenimiento, valor: string) {
-    setFormulario((actual) => ({ ...actual, [campo]: valor }));
+  async function cargarBloqueos(fecha: string) {
+    try {
+      const resultado = await listarBloqueos(fecha);
+      setBloqueos(resultado);
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar los bloqueos.",
+      );
+    }
   }
 
-  function comenzarEdicion(item: Mantenimiento) {
-    setEditando(item.id);
-    setFormulario({ espacioId: item.espacioId, fecha: item.fecha, horaInicio: item.horaInicio, horaFin: item.horaFin, motivo: item.motivo, activo: item.activo });
+  async function cargarDatos() {
+    setCargando(true);
     setMensaje(null);
+
+    try {
+      const respuesta = await getEspacios();
+
+      if (!respuesta.datos) {
+        throw new Error(
+          respuesta.error?.mensaje ??
+            "No se pudieron cargar los espacios.",
+        );
+      }
+
+      const espaciosActivos = respuesta.datos;
+      setEspacios(espaciosActivos);
+
+      setFormulario((actual) => ({
+        ...actual,
+        espacioId: actual.espacioId || espaciosActivos[0]?.id || "",
+      }));
+
+      await cargarBloqueos(fechaLocal());
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar los datos.",
+      );
+    } finally {
+      setCargando(false);
+    }
   }
 
-  function limpiarFormulario() {
-    setEditando(null);
-    setFormulario(formularioInicial);
+  useEffect(() => {
+    void cargarDatos();
+  }, []);
+
+  function actualizarCampo(campo: keyof Formulario, valor: string) {
+    setFormulario((actual) => ({
+      ...actual,
+      [campo]: valor,
+    }));
   }
 
-  async function guardar() {
-    const respuesta = editando ? await actualizarMantenimiento(editando, formulario) : await crearMantenimiento(formulario);
-    setMensaje(respuesta.mensaje);
-    if (!respuesta.ok) return;
-    setMantenimientos([...mantenimientosMock]);
-    limpiarFormulario();
+  async function guardarBloqueo() {
+    setMensaje(null);
+
+    if (!formulario.espacioId) {
+      setMensaje("Seleccioná un espacio.");
+      return;
+    }
+
+    if (!formulario.fecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      setMensaje("Ingresá una fecha válida con formato AAAA-MM-DD.");
+      return;
+    }
+
+    if (!formulario.motivo.trim()) {
+      setMensaje("Ingresá el motivo del bloqueo.");
+      return;
+    }
+
+    if (
+      !diaCompleto &&
+      (!formulario.inicio ||
+        !formulario.fin ||
+        formulario.inicio >= formulario.fin)
+    ) {
+      setMensaje(
+        "Ingresá un horario válido. El fin debe ser posterior al inicio.",
+      );
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      await crearBloqueo({
+        espacioIds: [formulario.espacioId],
+        fecha: formulario.fecha,
+        ...(diaCompleto
+          ? {}
+          : {
+              inicio: formulario.inicio,
+              fin: formulario.fin,
+            }),
+        motivo: formulario.motivo.trim(),
+      });
+
+      setMensaje("Bloqueo creado correctamente.");
+
+      setFormulario((actual) => ({
+        ...actual,
+        fecha: fechaLocal(),
+        motivo: "",
+      }));
+
+      await cargarBloqueos(fechaLocal());
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudo crear el bloqueo.",
+      );
+    } finally {
+      setGuardando(false);
+    }
   }
 
-  async function eliminar(id: string) {
-    const respuesta = await eliminarMantenimiento(id);
-    setMensaje(respuesta.mensaje);
-    if (respuesta.ok) setMantenimientos([...mantenimientosMock]);
+  async function quitarBloqueo(id: string) {
+    setMensaje(null);
+
+    try {
+      await eliminarBloqueo(id);
+      setMensaje("Bloqueo eliminado correctamente.");
+      await cargarBloqueos(fechaLocal());
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar el bloqueo.",
+      );
+    }
+  }
+
+  function nombreEspacio(espacioId: string) {
+    return (
+      espacios.find((espacio) => espacio.id === espacioId)?.nombre ??
+      espacioId
+    );
   }
 
   return (
     <AuthGuard allowedRoles={["administrador"]}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()}><Text style={styles.back}>← Volver</Text></Pressable>
-        <Text style={styles.eyebrow}>OPERACIONES</Text>
-        <Text style={styles.title}>Mantenimiento</Text>
-        <Text style={styles.subtitle}>Bloqueá horarios para tareas técnicas y mantené actualizado el calendario.</Text>
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>{editando ? "Editar mantenimiento" : "Nuevo mantenimiento"}</Text>
-          <TextInput value={formulario.espacioId} onChangeText={(valor) => actualizarCampo("espacioId", valor)} style={styles.input} placeholder="Espacio: espacio-1" placeholderTextColor={Colors.light.textSecondary} />
-          <TextInput value={formulario.fecha} onChangeText={(valor) => actualizarCampo("fecha", valor)} style={styles.input} placeholder="Fecha AAAA-MM-DD" placeholderTextColor={Colors.light.textSecondary} />
-          <View style={styles.fieldsRow}><TextInput value={formulario.horaInicio} onChangeText={(valor) => actualizarCampo("horaInicio", valor)} style={styles.halfInput} placeholder="Inicio HH:MM" placeholderTextColor={Colors.light.textSecondary} /><TextInput value={formulario.horaFin} onChangeText={(valor) => actualizarCampo("horaFin", valor)} style={styles.halfInput} placeholder="Fin HH:MM" placeholderTextColor={Colors.light.textSecondary} /></View>
-          <TextInput value={formulario.motivo} onChangeText={(valor) => actualizarCampo("motivo", valor)} style={styles.input} placeholder="Motivo del mantenimiento" placeholderTextColor={Colors.light.textSecondary} />
-          <View style={styles.actions}><Pressable style={styles.primary} onPress={() => void guardar()}><Text style={styles.primaryText}>{editando ? "Guardar cambios" : "Crear mantenimiento"}</Text></Pressable>{editando ? <Pressable style={styles.secondary} onPress={limpiarFormulario}><Text style={styles.secondaryText}>Cancelar</Text></Pressable> : null}</View>
-          {mensaje ? <Text style={styles.message}>{mensaje}</Text> : null}
-        </View>
-        <Text style={styles.sectionTitle}>Mantenimientos registrados</Text>
-        {mantenimientos.map((item) => <View key={item.id} style={styles.card}><View style={styles.cardInfo}><Text style={styles.cardTitle}>{espacios.find((espacio) => espacio.id === item.espacioId)?.nombre ?? item.espacioId}</Text><Text style={styles.detail}>{item.fecha} · {item.horaInicio} a {item.horaFin}</Text><Text style={styles.detail}>{item.motivo}</Text></View><View style={styles.actions}><Pressable style={styles.smallButton} onPress={() => comenzarEdicion(item)}><Text style={styles.smallText}>Editar</Text></Pressable><Pressable style={styles.deleteButton} onPress={() => void eliminar(item.id)}><Text style={styles.deleteText}>Eliminar</Text></Pressable></View></View>)}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.back}>← Volver</Text>
+        </Pressable>
+
+        <Text style={styles.title}>Mantenimiento y bloqueos</Text>
+
+        <Text style={styles.description}>
+          Administrá los horarios en los que los espacios no estarán disponibles.
+        </Text>
+
+        {mensaje && (
+          <View style={styles.messageBox}>
+            <Text style={styles.message}>{mensaje}</Text>
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>Crear bloqueo</Text>
+
+        <Text style={styles.label}>Espacio</Text>
+
+        {espacios.length === 0 && !cargando ? (
+          <Text style={styles.empty}>
+            No hay espacios disponibles.
+          </Text>
+        ) : (
+          <View style={styles.options}>
+            {espacios.map((espacio) => (
+              <Pressable
+                key={espacio.id}
+                style={[
+                  styles.option,
+                  formulario.espacioId === espacio.id &&
+                    styles.optionSelected,
+                ]}
+                onPress={() => actualizarCampo("espacioId", espacio.id)}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    formulario.espacioId === espacio.id &&
+                      styles.optionTextSelected,
+                  ]}
+                >
+                  {espacio.nombre}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        <Text style={styles.label}>Fecha (AAAA-MM-DD)</Text>
+
+        <TextInput
+          style={styles.input}
+          value={formulario.fecha}
+          onChangeText={(valor) => actualizarCampo("fecha", valor)}
+          placeholder="2026-11-15"
+          placeholderTextColor="#888"
+        />
+
+        <Pressable
+          style={[styles.option, diaCompleto && styles.optionSelected]}
+          onPress={() => setDiaCompleto((actual) => !actual)}
+        >
+          <Text
+            style={[
+              styles.optionText,
+              diaCompleto && styles.optionTextSelected,
+            ]}
+          >
+            {diaCompleto
+              ? "✓ Bloquear el día completo"
+              : "Bloquear el día completo"}
+          </Text>
+        </Pressable>
+
+        {!diaCompleto && (
+          <>
+            <Text style={styles.label}>Hora de inicio</Text>
+
+            <TextInput
+              style={styles.input}
+              value={formulario.inicio}
+              onChangeText={(valor) => actualizarCampo("inicio", valor)}
+              placeholder="09:00"
+              placeholderTextColor="#888"
+            />
+
+            <Text style={styles.label}>Hora de finalización</Text>
+
+            <TextInput
+              style={styles.input}
+              value={formulario.fin}
+              onChangeText={(valor) => actualizarCampo("fin", valor)}
+              placeholder="10:00"
+              placeholderTextColor="#888"
+            />
+          </>
+        )}
+
+        <Text style={styles.label}>Motivo</Text>
+
+        <TextInput
+          style={styles.input}
+          value={formulario.motivo}
+          onChangeText={(valor) => actualizarCampo("motivo", valor)}
+          placeholder="Ej. Reparación del espacio"
+          placeholderTextColor="#888"
+        />
+
+        <Pressable
+          style={[styles.primaryButton, guardando && styles.disabled]}
+          onPress={guardarBloqueo}
+          disabled={guardando || cargando}
+        >
+          <Text style={styles.primaryButtonText}>
+            {guardando ? "Guardando..." : "Confirmar bloqueo"}
+          </Text>
+        </Pressable>
+
+        <Text style={styles.sectionTitle}>Bloqueos existentes</Text>
+
+        {cargando ? (
+          <Text style={styles.empty}>Cargando información...</Text>
+        ) : bloqueos.length === 0 ? (
+          <Text style={styles.empty}>
+            No hay bloqueos registrados desde hoy.
+          </Text>
+        ) : (
+          bloqueos.map((bloqueo) => (
+            <View key={bloqueo.id} style={styles.blockCard}>
+              <Text style={styles.blockTitle}>
+                {nombreEspacio(bloqueo.espacioId)}
+              </Text>
+
+              <Text style={styles.blockText}>
+                Fecha: {bloqueo.fecha}
+              </Text>
+
+              <Text style={styles.blockText}>
+                Horario:{" "}
+                {bloqueo.inicio && bloqueo.fin
+                  ? `${bloqueo.inicio} a ${bloqueo.fin}`
+                  : "Día completo"}
+              </Text>
+
+              <Text style={styles.blockText}>
+                Motivo: {bloqueo.motivo}
+              </Text>
+
+              <Pressable
+                style={styles.deleteButton}
+                onPress={() => quitarBloqueo(bloqueo.id)}
+              >
+                <Text style={styles.deleteButtonText}>
+                  Eliminar bloqueo
+                </Text>
+              </Pressable>
+            </View>
+          ))
+        )}
       </ScrollView>
     </AuthGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.light.backgroundElement }, content: { padding: 20, gap: 14 },
-  back: { color: Colors.light.textSecondary, fontWeight: "800", fontFamily: Fonts.sans }, eyebrow: { color: Colors.light.textSecondary, fontSize: 12, fontWeight: "800", letterSpacing: 1.2, fontFamily: Fonts.sans }, title: { color: Colors.light.text, fontSize: 30, fontWeight: "900", fontFamily: Fonts.sans }, subtitle: { color: Colors.light.text, fontSize: 15, lineHeight: 21, fontFamily: Fonts.sans },
-  formCard: { backgroundColor: Colors.light.background, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.backgroundElement, padding: 16, gap: 10 }, formTitle: { color: Colors.light.text, fontSize: 18, fontWeight: "800", fontFamily: Fonts.sans }, input: { borderWidth: 1, borderColor: Colors.light.backgroundSelected, borderRadius: 9, padding: 12, color: Colors.light.text, backgroundColor: Colors.light.background, fontFamily: Fonts.sans }, fieldsRow: { flexDirection: "row", gap: 10 }, halfInput: { flex: 1, borderWidth: 1, borderColor: Colors.light.backgroundSelected, borderRadius: 9, padding: 12, color: Colors.light.text, fontFamily: Fonts.sans }, actions: { flexDirection: "row", gap: 8, marginTop: 4 }, primary: { flex: 1, backgroundColor: Colors.light.backgroundSelected, borderRadius: 9, padding: 13, alignItems: "center" }, primaryText: { color: Colors.light.background, fontWeight: "800", fontFamily: Fonts.sans }, secondary: { flex: 1, borderWidth: 1, borderColor: Colors.light.backgroundSelected, borderRadius: 9, padding: 13, alignItems: "center" }, secondaryText: { color: Colors.light.textSecondary, fontWeight: "800", fontFamily: Fonts.sans }, message: { color: Colors.light.textSecondary, fontWeight: "800", fontFamily: Fonts.sans }, sectionTitle: { color: Colors.light.text, fontSize: 19, fontWeight: "800", marginTop: 8, fontFamily: Fonts.sans }, card: { backgroundColor: Colors.light.background, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.backgroundElement, padding: 15, gap: 12 }, cardInfo: { gap: 4 }, cardTitle: { color: Colors.light.text, fontSize: 17, fontWeight: "800", fontFamily: Fonts.sans }, detail: { color: Colors.light.text, fontFamily: Fonts.sans }, smallButton: { borderWidth: 1, borderColor: Colors.light.backgroundSelected, borderRadius: 8, padding: 10, alignItems: "center" }, smallText: { color: Colors.light.textSecondary, fontWeight: "800", fontFamily: Fonts.sans }, deleteButton: { borderWidth: 1, borderColor: Colors.light.text, borderRadius: 8, padding: 10, alignItems: "center" }, deleteText: { color: Colors.light.text, fontWeight: "800", fontFamily: Fonts.sans },
+  container: {
+    flex: 1,
+    backgroundColor: "#101820",
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  back: {
+    color: "#9BCBCE",
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  title: {
+    color: "#FFFFFF",
+    fontSize: 25,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  description: {
+    color: "#B9C4CC",
+    fontSize: 14,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "bold",
+    marginTop: 24,
+    marginBottom: 14,
+  },
+  label: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 14,
+    marginBottom: 7,
+  },
+  input: {
+    backgroundColor: "#202D38",
+    color: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#42515E",
+    borderRadius: 9,
+    padding: 12,
+    fontSize: 15,
+  },
+  options: {
+    gap: 8,
+  },
+  option: {
+    backgroundColor: "#202D38",
+    borderColor: "#42515E",
+    borderWidth: 1,
+    borderRadius: 9,
+    padding: 12,
+    marginTop: 8,
+  },
+  optionSelected: {
+    backgroundColor: "#244B50",
+    borderColor: "#9BCBCE",
+  },
+  optionText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+  },
+  optionTextSelected: {
+    fontWeight: "bold",
+    color: "#FFFFFF",
+  },
+  primaryButton: {
+    backgroundColor: "#287D73",
+    borderRadius: 9,
+    padding: 15,
+    alignItems: "center",
+    marginTop: 22,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  messageBox: {
+    backgroundColor: "#202D38",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  message: {
+    color: "#FFFFFF",
+    fontSize: 14,
+  },
+  empty: {
+    color: "#B9C4CC",
+    fontSize: 14,
+    marginVertical: 12,
+  },
+  blockCard: {
+    backgroundColor: "#202D38",
+    borderColor: "#42515E",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+  },
+  blockTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  blockText: {
+    color: "#D1D9DF",
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  deleteButton: {
+    backgroundColor: "#713B40",
+    padding: 11,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  deleteButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+  },
 });

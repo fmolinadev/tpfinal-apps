@@ -53,7 +53,8 @@ async function request<T>(
     );
   }
 
-  const body = await response.json().catch(() => null);
+  const responseText = await response.text();
+  const body = responseText ? JSON.parse(responseText) : null;
 
   if (!response.ok) {
     const error = body?.error as ErrorApi | undefined;
@@ -62,8 +63,9 @@ async function request<T>(
     );
   }
 
-  if (body === null) {
-    throw new Error("El servidor devolvió una respuesta inválida.");
+  // Algunos endpoints responden 204 y no devuelven contenido
+  if (response.status === 204 || body === null) {
+    return undefined as T;
   }
 
   return body as T;

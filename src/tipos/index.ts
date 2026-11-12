@@ -1,9 +1,40 @@
 export type FechaISO = string;
 
-export type Deporte = "futbol" | "padel" | "tenis" | "basket";
-export type Superficie = "cesped" | "sintetico" | "madera" | "cemento";
-export type EstadoTurno = "libre" | "ocupado" | "mantenimiento" | "fijo";
-export type EstadoReserva = "activa" | "cancelada" | "completada" | "ausente";
+export type Deporte =
+  | "futbol"
+  | "futbol11"
+  | "padel"
+  | "tenis"
+  | "basket"
+  | "voley"
+  | "gimnasio";
+
+export type Superficie =
+  | "cesped"
+  | "sintetico"
+  | "madera"
+  | "cemento"
+  | "arena"
+  | "parquet"
+  | "polvo-ladrillo"
+  | "piso-flotante"
+  | "cesped-natural"
+  | "cemento-alisado";
+
+export type EstadoTurno =
+  | "libre"
+  | "ocupado"
+  | "reservado"
+  | "mantenimiento"
+  | "fijo";
+
+export type EstadoReserva =
+  | "activa"
+  | "confirmada"
+  | "cancelada"
+  | "completada"
+  | "cumplida"
+  | "ausente";
 
 export interface Espacio {
   id: string;
@@ -17,6 +48,11 @@ export interface Espacio {
   videoUrl: string | null;
   latitud: number;
   longitud: number;
+
+  // Datos adicionales que proporciona la API
+  complejo?: string;
+  techado?: boolean;
+  capacidad?: number;
 }
 
 export interface Turno {

@@ -3,8 +3,26 @@ export type Coordenadas = {
   lng: number;
 };
 
-export type TipoDeporte = "futbol" | "tenis" | "paddle" | "basket" | "voley";
-export type TipoSuperficie = "cesped" | "sintetico" | "cemento" | "parquet";
+export type TipoDeporte =
+  | "futbol"
+  | "futbol11"
+  | "tenis"
+  | "paddle"
+  | "padel"
+  | "basket"
+  | "voley"
+  | "gimnasio";
+
+export type TipoSuperficie =
+  | "cesped"
+  | "sintetico"
+  | "cemento"
+  | "parquet"
+  | "arena"
+  | "polvo-ladrillo"
+  | "piso-flotante"
+  | "cesped-natural"
+  | "cemento-alisado";
 
 export type Espacio = {
   id: string;

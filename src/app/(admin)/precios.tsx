@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
+import { actualizarPrecio } from "@/servicios/admin-precios";
 import { getEspacios } from "@/servicios/espacios";
-import { actualizarPrecio } from "@/servicios/admin";
 import type { Espacio } from "@/tipos";
 
 export default function PreciosAdminScreen() {
@@ -27,21 +27,32 @@ export default function PreciosAdminScreen() {
     setMensaje(null);
   }
 
-  async function guardarPrecio(espacioId: string) {
-    const valor = Number(precio.replace(",", "."));
-    if (!Number.isFinite(valor) || valor <= 0) {
-      setMensaje("El precio debe ser un número mayor que cero.");
-      return;
-    }
-    const respuesta = await actualizarPrecio(espacioId, valor);
-    if ("error" in respuesta && respuesta.error) {
-      setMensaje(respuesta.error.mensaje);
-      return;
-    }
-    setEspacios((actuales) => actuales.map((espacio) => espacio.id === espacioId ? { ...espacio, precioPorHora: valor } : espacio));
-    setEditando(null);
-    setMensaje("Precio actualizado correctamente.");
+ async function guardarPrecio(espacioId: string) {
+  const valor = Number(precio.replace(",", "."));
+
+  if (!Number.isInteger(valor) || valor < 1) {
+    setMensaje("El precio debe ser un número entero mayor que cero.");
+    return;
   }
+
+  const respuesta = await actualizarPrecio(espacioId, valor);
+
+  if (!respuesta.ok) {
+    setMensaje(respuesta.mensaje);
+    return;
+  }
+
+  setEspacios((actuales) =>
+    actuales.map((espacio) =>
+      espacio.id === espacioId
+        ? { ...espacio, precioPorHora: valor }
+        : espacio,
+    ),
+  );
+
+  setEditando(null);
+  setMensaje(respuesta.mensaje);
+}
 
   return (
     <AuthGuard allowedRoles={["administrador"]}>

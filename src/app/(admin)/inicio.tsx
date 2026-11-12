@@ -36,7 +36,6 @@ const ADMIN_ITEMS: DashboardItem[] = [
 export default function InicioAdminScreen() {
   return (
     <HomeDashboard
-      eyebrow="ADMINISTRACIÓN"
       title="Hola"
       description="Gestioná el complejo y sus espacios desde un solo lugar."
       profileHref="/(admin)/perfil"

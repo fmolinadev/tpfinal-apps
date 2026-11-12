@@ -1,30 +1,42 @@
-import { reservasFijasMock, reservasMock } from "@/mocks/reservas";
-import { mantenimientosMock, turnosMock } from "@/mocks/turnos";
-import type { Mantenimiento, Turno } from "@/tipos/turno";
-import { calcularTurnosDisponibles } from "@/utilidades/disponibilidad";
+import { apiGet } from "@/servicios/api";
+import type { EstadoTurno, Turno } from "@/tipos/turno";
+
+type TurnoApi = {
+  id: string;
+  espacioId: string;
+  fecha: string;
+  inicio: string;
+  fin: string;
+  estado: EstadoTurno;
+  reservaId: string | null;
+  motivoBloqueo: string | null;
+  precio: number;
+};
+
+type RespuestaTurnosApi = {
+  datos: TurnoApi[];
+  meta: {
+    total: number;
+    pagina: number;
+    porPagina: number;
+  };
+};
 
 export async function obtenerTurnos(
   espacioId: string,
   fecha: string,
 ): Promise<Turno[]> {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-
-  const turnos = calcularTurnosDisponibles({
-    espacioId,
-    fecha,
-    reservas: reservasMock,
-    reservasFijas: reservasFijasMock,
-    mantenimientos: mantenimientosMock,
-  });
-
-  return turnos.length ? turnos : turnosMock;
-}
-
-export async function obtenerMantenimientos(
-  espacioId: string,
-): Promise<Mantenimiento[]> {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  return mantenimientosMock.filter(
-    (mantenimiento) => mantenimiento.espacioId === espacioId,
+  const respuesta = await apiGet<RespuestaTurnosApi>(
+    `/espacios/${espacioId}/turnos?fecha=${encodeURIComponent(fecha)}`,
   );
+
+  return respuesta.datos.map((turno) => ({
+    id: turno.id,
+    espacioId: turno.espacioId,
+    fecha: turno.fecha,
+    hora: turno.inicio,
+    precio: turno.precio,
+    estado: turno.estado,
+    motivo: turno.motivoBloqueo ?? undefined,
+  }));
 }

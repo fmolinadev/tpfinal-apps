@@ -30,7 +30,6 @@ const STAFF_ITEMS: DashboardItem[] = [
 export default function StaffInicioScreen() {
   return (
     <HomeDashboard
-      eyebrow="RECEPCIÓN DEPORTIVA"
       title="Hola"
       description="Accedé rápidamente a las herramientas de tu jornada."
       profileHref="/(staff)/perfil"

@@ -1,14 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
@@ -18,8 +18,6 @@ import { programarRecordatorioTurno } from "@/servicios/notificaciones";
 import { crearReserva, getTurnos } from "@/servicios/reservas";
 import type { Espacio, EstadoTurno, Turno } from "@/tipos";
 
-const HORA_INICIO = 8;
-const HORA_FIN = 24;
 const DIAS_VISIBLES = 7;
 
 function obtenerIdParametro(id: string | string[] | undefined): string {
@@ -78,11 +76,12 @@ function textoEstado(estado: EstadoTurno, precio: number): string {
     case "libre":
       return `Libre - ${formatearPrecio(precio)}`;
     case "ocupado":
-      return "OCUPADO";
+    case "reservado":
+      return "RESERVADO";
     case "mantenimiento":
       return "MANTENIMIENTO";
     case "fijo":
-      return "FIJO - Grupo del martes";
+      return "FIJO";
   }
 }
 
@@ -94,6 +93,7 @@ export default function DisponibilidadEspacioScreen() {
   const router = useRouter();
   const parametros = useLocalSearchParams<{ id?: string | string[] }>();
   const espacioId = obtenerIdParametro(parametros.id);
+
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() =>
     inicioDelDia(new Date()),
   );
@@ -129,6 +129,7 @@ export default function DisponibilidadEspacioScreen() {
 
     try {
       const fechaFin = sumarDias(fechaSeleccionada, 1);
+
       const [respuestaTurnos, respuestaEspacio] = await Promise.all([
         getTurnos(
           espacioId,
@@ -158,28 +159,12 @@ export default function DisponibilidadEspacioScreen() {
           claveFecha(new Date(turno.fechaHoraInicio)) ===
           claveFecha(fechaSeleccionada),
       );
-      const turnosPorHora = new Map(
-        turnosDelDia.map((turno) => [
-          new Date(turno.fechaHoraInicio).getHours(),
-          turno,
-        ]),
-      );
-      const precioBase = espacioActual?.precioPorHora ?? 0;
-      const grilla = Array.from(
-        { length: HORA_FIN - HORA_INICIO },
-        (_, indice) => {
-          const hora = HORA_INICIO + indice;
-          return turnosPorHora.get(hora) ?? {
-            id: `libre-${espacioId}-${claveFecha(fechaSeleccionada)}-${hora}`,
-            espacioId,
-            fechaHoraInicio: fechaIsoParaHora(fechaSeleccionada, hora),
-            estado: "libre" as const,
-            precio: precioBase,
-          };
-        },
-      ).filter((turno) => !esTurnoPasado(turno.fechaHoraInicio));
 
-      setTurnos(grilla);
+      const turnosDisponibles = turnosDelDia.filter(
+        (turno) => !esTurnoPasado(turno.fechaHoraInicio),
+      );
+
+      setTurnos(turnosDisponibles);
     } catch (err) {
       setError(
         err instanceof Error
@@ -213,6 +198,7 @@ export default function DisponibilidadEspacioScreen() {
     }
 
     const cantidad = Number.parseInt(cantidadJugadores, 10);
+
     if (!Number.isInteger(cantidad) || cantidad < 1) {
       setMensajeReserva("Ingresá una cantidad de jugadores válida.");
       return;
@@ -223,15 +209,14 @@ export default function DisponibilidadEspacioScreen() {
 
     try {
       const usuario = await getCurrentUserSession();
+
       if (!usuario) {
         setMensajeReserva("La sesión expiró. Volvé a iniciar sesión.");
         return;
       }
 
       const respuesta = await crearReserva(
-        usuario.id,
-        turnoSeleccionado.espacioId,
-        turnoSeleccionado.fechaHoraInicio,
+        turnoSeleccionado.id,
         cantidad,
       );
 
@@ -240,9 +225,11 @@ export default function DisponibilidadEspacioScreen() {
         return;
       }
 
+      const reservaCreada = respuesta.datos[0];
+
       await programarRecordatorioTurno(
-        respuesta.datos[0].id,
-        respuesta.datos[0].fechaHoraInicio,
+        reservaCreada.id,
+        reservaCreada.fechaHoraInicio,
         espacio?.nombre ?? "el espacio deportivo",
       );
 
@@ -250,7 +237,9 @@ export default function DisponibilidadEspacioScreen() {
       router.replace("/(tabs)/reservas");
     } catch (err) {
       setMensajeReserva(
-        err instanceof Error ? err.message : "No se pudo confirmar la reserva.",
+        err instanceof Error
+          ? err.message
+          : "No se pudo confirmar la reserva.",
       );
     } finally {
       setReservando(false);
@@ -258,7 +247,9 @@ export default function DisponibilidadEspacioScreen() {
   }
 
   const hoy = inicioDelDia(new Date());
-  const puedeIrAlDiaAnterior = fechaSeleccionada.getTime() > hoy.getTime();
+  const puedeIrAlDiaAnterior =
+    fechaSeleccionada.getTime() > hoy.getTime();
+
   const fechaResumen = turnoSeleccionado
     ? new Date(turnoSeleccionado.fechaHoraInicio)
     : null;
@@ -291,6 +282,7 @@ export default function DisponibilidadEspacioScreen() {
           >
             <Text style={styles.navigationText}>[ &lt; Día anterior ]</Text>
           </Pressable>
+
           <Pressable
             style={styles.navigationButton}
             onPress={() =>
@@ -307,7 +299,9 @@ export default function DisponibilidadEspacioScreen() {
           contentContainerStyle={styles.dateRow}
         >
           {fechasVisibles.map((fecha) => {
-            const activa = claveFecha(fecha) === claveFecha(fechaSeleccionada);
+            const activa =
+              claveFecha(fecha) === claveFecha(fechaSeleccionada);
+
             return (
               <Pressable
                 key={claveFecha(fecha)}
@@ -319,6 +313,7 @@ export default function DisponibilidadEspacioScreen() {
                 >
                   {fecha.toLocaleDateString("es-AR", { weekday: "short" })}
                 </Text>
+
                 <Text
                   style={[styles.dateNumber, activa && styles.dateTextActive]}
                 >
@@ -344,6 +339,7 @@ export default function DisponibilidadEspacioScreen() {
         ) : error ? (
           <View style={styles.stateContainer}>
             <Text style={styles.errorText}>{error}</Text>
+
             <Pressable
               style={styles.secondaryButton}
               onPress={cargarDisponibilidad}
@@ -351,10 +347,17 @@ export default function DisponibilidadEspacioScreen() {
               <Text style={styles.secondaryButtonText}>[ Reintentar ]</Text>
             </Pressable>
           </View>
+        ) : turnos.length === 0 ? (
+          <View style={styles.stateContainer}>
+            <Text style={styles.stateText}>
+              No hay turnos disponibles para esta fecha.
+            </Text>
+          </View>
         ) : (
           <View style={styles.grid}>
             {turnos.map((turno) => {
               const deshabilitado = turno.estado !== "libre";
+
               return (
                 <Pressable
                   key={turno.id}
@@ -362,12 +365,19 @@ export default function DisponibilidadEspacioScreen() {
                   onPress={() => seleccionarTurno(turno)}
                   style={[
                     styles.turno,
-                    styles[`turno_${turno.estado}`],
+                    turno.estado === "libre"
+                      ? styles.turno_libre
+                      : turno.estado === "fijo"
+                        ? styles.turno_fijo
+                        : turno.estado === "mantenimiento"
+                          ? styles.turno_mantenimiento
+                          : styles.turno_ocupado,
                   ]}
                 >
                   <Text style={styles.turnoHora}>
                     {formatearHora(turno.fechaHoraInicio)}
                   </Text>
+
                   <Text style={styles.turnoEstado}>
                     {textoEstado(turno.estado, turno.precio)}
                   </Text>
@@ -388,6 +398,7 @@ export default function DisponibilidadEspacioScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Confirmar reserva</Text>
             <Text style={styles.modalQuestion}>¿Cuántos van a ser?</Text>
+
             <TextInput
               value={cantidadJugadores}
               onChangeText={setCantidadJugadores}
@@ -403,15 +414,19 @@ export default function DisponibilidadEspacioScreen() {
             {fechaResumen && turnoSeleccionado && (
               <View style={styles.summary}>
                 <Text style={styles.summaryTitle}>Resumen</Text>
+
                 <Text style={styles.summaryText}>
                   Cancha: {espacio?.nombre ?? espacioId}
                 </Text>
+
                 <Text style={styles.summaryText}>
                   Fecha: {formatearFecha(fechaResumen)}
                 </Text>
+
                 <Text style={styles.summaryText}>
                   Hora: {formatearHora(turnoSeleccionado.fechaHoraInicio)}
                 </Text>
+
                 <Text style={styles.summaryText}>
                   Precio a pagar en el lugar:{" "}
                   {formatearPrecio(turnoSeleccionado.precio)}
@@ -435,6 +450,7 @@ export default function DisponibilidadEspacioScreen() {
                 {reservando ? "Cargando..." : "[ CONFIRMAR RESERVA ]"}
               </Text>
             </Pressable>
+
             <Pressable
               style={styles.cancelButton}
               disabled={reservando}

@@ -3,39 +3,45 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
-import { validarQrIngreso } from "@/servicios/admin";
+import { apiPost } from "@/servicios/api";
 import { authenticateWithBiometrics } from "@/servicios/auth";
 
 export default function EscanerAdminScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
+
   const [biometriaValidada, setBiometriaValidada] = useState(false);
   const [autenticando, setAutenticando] = useState(false);
   const [escaneando, setEscaneando] = useState(false);
-  const [canchaEsperada, setCanchaEsperada] = useState("espacio-1");
-  const [resultado, setResultado] = useState<"permitido" | "denegado" | null>(
-    null,
-  );
+  const [espacioId, setEspacioId] = useState("");
+
+  const [resultado, setResultado] = useState<
+    "permitido" | "denegado" | null
+  >(null);
+
   const [mensaje, setMensaje] = useState(
     "Autenticá tu identidad para habilitar el escáner.",
   );
+
   const [procesando, setProcesando] = useState(false);
 
   async function habilitarEscaner() {
     setAutenticando(true);
     setMensaje("");
+
     try {
       const autenticado = await authenticateWithBiometrics();
+
       if (!autenticado) {
         setMensaje("ACCESO DENEGADO - AUTENTICACIÓN BIOMÉTRICA FALLIDA");
         setResultado("denegado");
@@ -45,6 +51,7 @@ export default function EscanerAdminScreen() {
       const permiso = permission?.granted
         ? permission
         : await requestPermission();
+
       if (!permiso.granted) {
         setMensaje("ACCESO DENEGADO - PERMISO DE CÁMARA RECHAZADO");
         setResultado("denegado");
@@ -52,12 +59,14 @@ export default function EscanerAdminScreen() {
       }
 
       setBiometriaValidada(true);
-      setEscaneando(true);
+      setEscaneando(false);
       setResultado(null);
-      setMensaje("Cámara habilitada. Apuntá al código QR.");
-    } catch (err) {
+      setMensaje("Ingresá el identificador del espacio y escaneá el QR.");
+    } catch (error) {
       setMensaje(
-        err instanceof Error ? err.message : "No se pudo habilitar la cámara.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo habilitar la cámara.",
       );
       setResultado("denegado");
     } finally {
@@ -65,31 +74,47 @@ export default function EscanerAdminScreen() {
     }
   }
 
-  async function procesarQr(data: string) {
-    if (procesando) return;
+  async function procesarQr(codigoQr: string) {
+    if (procesando || !escaneando) return;
+
+    const espacio = espacioId.trim();
+
+    if (!/^esp-[A-Za-z0-9_-]{1,36}$/.test(espacio)) {
+      setEscaneando(false);
+      setResultado("denegado");
+      setMensaje("Ingresá un identificador de espacio válido (esp-...).");
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Error,
+      );
+      return;
+    }
+
     setProcesando(true);
     setEscaneando(false);
+    setResultado(null);
+    setMensaje("Registrando ingreso...");
 
     try {
-      const respuesta = await validarQrIngreso(data, canchaEsperada.trim());
-      if ("error" in respuesta && respuesta.error) {
-        setResultado("denegado");
-        setMensaje(respuesta.error.mensaje);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        return;
-      }
+      await apiPost("/ingresos", {
+        codigoQr,
+        espacioId: espacio,
+      });
 
       setResultado("permitido");
-      setMensaje(respuesta.datos[0]?.mensaje ?? "ACCESO PERMITIDO");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
+      setMensaje("INGRESO REGISTRADO CORRECTAMENTE.");
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+    } catch (error) {
       setResultado("denegado");
       setMensaje(
-        err instanceof Error
-          ? err.message
-          : "ACCESO DENEGADO - ERROR DE LECTURA",
+        error instanceof Error
+          ? error.message
+          : "No se pudo registrar el ingreso.",
       );
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Error,
+      );
     } finally {
       setProcesando(false);
     }
@@ -99,7 +124,11 @@ export default function EscanerAdminScreen() {
     <AuthGuard allowedRoles={["administrador"]}>
       <View style={styles.container}>
         <Text style={styles.title}>Escáner QR</Text>
-        <Text style={styles.helperText}>Uso exclusivo del administrador.</Text>
+
+        <Text style={styles.helperText}>
+          Uso exclusivo del administrador.
+        </Text>
+
         <View style={styles.navigationRow}>
           <Pressable
             style={styles.navigationButton}
@@ -107,6 +136,7 @@ export default function EscanerAdminScreen() {
           >
             <Text style={styles.navigationText}>Volver</Text>
           </Pressable>
+
           <Pressable
             style={styles.navigationButton}
             onPress={() => router.push("/(admin)/agenda")}
@@ -115,19 +145,10 @@ export default function EscanerAdminScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.label}>Cancha esperada</Text>
-        <TextInput
-          value={canchaEsperada}
-          onChangeText={setCanchaEsperada}
-          style={styles.input}
-          autoCapitalize="none"
-          placeholder="Ejemplo: espacio-1"
-          placeholderTextColor="#9aa8bb"
-        />
-
         {!biometriaValidada ? (
           <View style={styles.centered}>
             <Text style={styles.bodyText}>{mensaje}</Text>
+
             <Pressable
               style={styles.primaryButton}
               disabled={autenticando}
@@ -142,6 +163,17 @@ export default function EscanerAdminScreen() {
           </View>
         ) : (
           <>
+            <Text style={styles.label}>Identificador del espacio</Text>
+
+            <TextInput
+              value={espacioId}
+              onChangeText={setEspacioId}
+              style={styles.input}
+              autoCapitalize="none"
+              placeholder="Ejemplo: esp-..."
+              placeholderTextColor="#9aa8bb"
+            />
+
             <View style={styles.cameraFrame}>
               {permission?.granted && escaneando ? (
                 <CameraView
@@ -153,7 +185,9 @@ export default function EscanerAdminScreen() {
               ) : (
                 <View style={styles.cameraMessage}>
                   <Text style={styles.bodyText}>
-                    {procesando ? "Validando código..." : mensaje}
+                    {procesando
+                      ? "Registrando ingreso..."
+                      : mensaje}
                   </Text>
                 </View>
               )}
@@ -175,14 +209,26 @@ export default function EscanerAdminScreen() {
             <View style={styles.actions}>
               <Pressable
                 style={styles.primaryButton}
-                disabled={procesando}
-                onPress={() => setEscaneando(true)}
+                disabled={procesando || escaneando}
+                onPress={() => {
+                  setResultado(null);
+                  setMensaje("Apuntá al código QR de la reserva.");
+                  setEscaneando(true);
+                }}
               >
-                <Text style={styles.primaryButtonText}>[ Escanear QR ]</Text>
+                <Text style={styles.primaryButtonText}>
+                  [ Escanear QR ]
+                </Text>
               </Pressable>
+
               <Pressable
                 style={styles.secondaryButton}
-                onPress={() => setBiometriaValidada(false)}
+                disabled={procesando}
+                onPress={() => {
+                  setBiometriaValidada(false);
+                  setEscaneando(false);
+                  setResultado(null);
+                }}
               >
                 <Text style={styles.secondaryButtonText}>
                   [ Cerrar escáner ]
