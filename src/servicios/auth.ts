@@ -68,6 +68,27 @@ export async function loginUsuario({
   return { token, usuario };
 }
 
+export async function verificarContrasena(
+  usuarioActual: Usuario,
+  password: string,
+): Promise<void> {
+  if (!password) {
+    throw new Error("Ingresá tu contraseña.");
+  }
+
+  const respuesta = await apiPost<RespuestaSesion>("/auth/ingreso", {
+    email: usuarioActual.email,
+    contrasena: password,
+  });
+
+  if (respuesta.datos.usuario.id !== usuarioActual.id) {
+    throw new Error("La contraseña no corresponde a la cuenta actual.");
+  }
+
+  await saveSessionToken(respuesta.datos.token);
+  await saveSessionUser(respuesta.datos.usuario);
+}
+
 export async function registrarUsuario({
   nombre,
   email,
@@ -100,7 +121,9 @@ export async function isBiometricSupported(): Promise<boolean> {
   return compatible && enrolled;
 }
 
-export async function authenticateWithBiometrics(): Promise<boolean> {
+export async function authenticateWithBiometrics(
+  options: { disableDeviceFallback?: boolean } = {},
+): Promise<boolean> {
   const supported = await isBiometricSupported();
 
   if (!supported) return false;
@@ -108,7 +131,7 @@ export async function authenticateWithBiometrics(): Promise<boolean> {
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage: "Autenticación biométrica requerida",
     fallbackLabel: "Usar contraseña",
-    disableDeviceFallback: false,
+    disableDeviceFallback: options.disableDeviceFallback ?? false,
   });
 
   return result.success;

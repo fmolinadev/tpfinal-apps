@@ -2,7 +2,7 @@
 
 Aplicación móvil para consultar espacios deportivos, revisar horarios, crear y gestionar reservas, y dar soporte a la operación del complejo desde perfiles de jugador, encargado y administrador.
 
-El proyecto corresponde al trabajo final de la materia Desarrollo de Aplicaciones Móviles de la FCAd, UNER. Está desarrollado con Expo, React Native, TypeScript y Expo Router. En el estado actual, los datos y las operaciones principales se simulan localmente: no hay una API ni una base de datos remota conectadas.
+El proyecto corresponde al trabajo final de la materia Desarrollo de Aplicaciones Móviles de la FCAd, UNER. Está desarrollado con Expo, React Native, TypeScript y Expo Router. La autenticación y varios servicios consumen la API de Reservas Deportivas; algunas pantallas y operaciones todavía usan datos mock locales.
 
 ## Índice
 
@@ -81,6 +81,14 @@ Iniciar Expo:
 npx expo start
 ```
 
+El front lee la dirección de la API desde `EXPO_PUBLIC_API_URL`. Configurala en `.env.local` antes de iniciar Expo:
+
+```env
+EXPO_PUBLIC_API_URL=http://localhost:3000
+```
+
+`localhost` sirve para la versión web en esta computadora. Para usar un teléfono físico, reemplazalo por la IP de esta computadora en la misma red Wi-Fi (por ejemplo, `http://192.168.0.10:3000`). La API debe estar corriendo en el puerto 3000. Si cambiás esta variable con Expo abierto, reiniciá Expo para que tome el nuevo valor.
+
 Desde el menú de Expo se puede abrir la aplicación en un dispositivo o emulador. También están definidos estos comandos:
 
 ```bash
@@ -108,7 +116,7 @@ El registro agrega un usuario jugador al arreglo mock durante la ejecución actu
 
 ### 1. Inicio y autenticación
 
-La ruta inicial `src/app/index.tsx` muestra una pantalla de presentación y luego navega al login. El login y el registro llaman a los métodos de [`src/servicios/auth.ts`](./src/servicios/auth.ts). Estos buscan o agregan usuarios en mocks, generan un token simulado y guardan token y usuario con Secure Store.
+La ruta inicial `src/app/index.tsx` muestra una pantalla de presentación y luego navega al login. El login y el registro llaman a los métodos de [`src/servicios/auth.ts`](./src/servicios/auth.ts), que envían las credenciales a la API configurada y guardan el token y el usuario recibidos con Secure Store.
 
 Después de iniciar sesión, la navegación depende del rol:
 

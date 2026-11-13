@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 
+import { SpaceSelect } from "@/components/space-select";
 import { Colors, Fonts } from "@/constants/theme";
 import { crearBloqueo } from "@/servicios/admin-bloqueos";
+import { getEspacios } from "@/servicios/espacios";
+import type { Espacio } from "@/tipos";
 
 function fechaLocal(): string {
   const fecha = new Date();
@@ -19,21 +24,75 @@ function fechaLocal(): string {
   return `${anio}-${mes}-${dia}`;
 }
 
+function esHoraValida(hora: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
+}
+
 export default function BloqueosScreen() {
+  const [espacios, setEspacios] = useState<Espacio[]>([]);
   const [espacioId, setEspacioId] = useState("");
   const [fecha, setFecha] = useState(fechaLocal());
+  const [inicio, setInicio] = useState("09:00");
+  const [fin, setFin] = useState("10:00");
+  const [diaCompleto, setDiaCompleto] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [mensaje, setMensaje] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(false);
+  const [cargandoEspacios, setCargandoEspacios] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let activa = true;
+      setEspacios([]);
+      setEspacioId("");
+      setFecha(fechaLocal());
+      setInicio("09:00");
+      setFin("10:00");
+      setDiaCompleto(false);
+      setMotivo("");
+      setMensaje(null);
+      setCargandoEspacios(true);
+
+      async function cargarEspacios() {
+        try {
+          const respuesta = await getEspacios();
+          if (!activa) return;
+
+          if ("error" in respuesta) {
+            throw new Error(
+              respuesta.error?.mensaje ?? "No se pudieron cargar los espacios.",
+            );
+          }
+
+          setEspacios(respuesta.datos);
+        } catch (error) {
+          if (activa) {
+            setMensaje(
+              error instanceof Error
+                ? error.message
+                : "No se pudieron cargar los espacios.",
+            );
+          }
+        } finally {
+          if (activa) setCargandoEspacios(false);
+        }
+      }
+
+      void cargarEspacios();
+
+      return () => {
+        activa = false;
+      };
+    }, []),
+  );
 
   async function confirmarBloqueo() {
     setMensaje(null);
 
-    const id = espacioId.trim();
     const motivoFinal = motivo.trim();
 
-    if (!/^esp-[A-Za-z0-9_-]{1,36}$/.test(id)) {
-      setMensaje("Ingresá un ID de espacio válido. Debe comenzar con esp-.");
+    if (!espacioId) {
+      setMensaje("Seleccioná un espacio.");
       return;
     }
 
@@ -42,12 +101,24 @@ export default function BloqueosScreen() {
       return;
     }
 
-    const fechaIngresada = new Date(`${fecha}T00:00:00`);
+    const [anio, mes, dia] = fecha.split("-").map(Number);
+    const fechaIngresada = new Date(anio, mes - 1, dia);
     if (
-      Number.isNaN(fechaIngresada.getTime()) ||
-      fechaIngresada.toISOString().slice(0, 10) !== fecha
+      fechaIngresada.getFullYear() !== anio ||
+      fechaIngresada.getMonth() !== mes - 1 ||
+      fechaIngresada.getDate() !== dia
     ) {
       setMensaje("La fecha ingresada no es válida.");
+      return;
+    }
+
+    if (
+      !diaCompleto &&
+      (!esHoraValida(inicio) || !esHoraValida(fin) || inicio >= fin)
+    ) {
+      setMensaje(
+        "Ingresá un horario válido. El fin debe ser posterior al inicio.",
+      );
       return;
     }
 
@@ -57,11 +128,12 @@ export default function BloqueosScreen() {
     }
 
     try {
-      setCargando(true);
+      setGuardando(true);
 
       await crearBloqueo({
-        espacioIds: [id],
+        espacioIds: [espacioId],
         fecha,
+        ...(diaCompleto ? {} : { inicio, fin }),
         motivo: motivoFinal,
       });
 
@@ -74,12 +146,16 @@ export default function BloqueosScreen() {
           : "No se pudo registrar el bloqueo.",
       );
     } finally {
-      setCargando(false);
+      setGuardando(false);
     }
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.eyebrow}>OPERACIONES</Text>
       <Text style={styles.title}>Bloquear horario</Text>
       <Text style={styles.subtitle}>
@@ -87,51 +163,97 @@ export default function BloqueosScreen() {
       </Text>
 
       <View style={styles.card}>
-        <Text style={styles.label}>ID del espacio</Text>
-        <TextInput
-          value={espacioId}
-          onChangeText={setEspacioId}
-          placeholder="Ej. esp-1"
-          placeholderTextColor={Colors.light.textSecondary}
-          autoCapitalize="none"
-          style={styles.input}
+        <Text style={styles.label}>Espacio</Text>
+        <SpaceSelect
+          spaces={espacios}
+          selectedId={espacioId}
+          onSelect={setEspacioId}
+          disabled={cargandoEspacios || espacios.length === 0}
+          placeholder={
+            cargandoEspacios ? "Cargando espacios..." : "Seleccioná un espacio"
+          }
         />
 
-        <Text style={styles.label}>Fecha</Text>
-        <TextInput
-          value={fecha}
-          onChangeText={setFecha}
-          placeholder="AAAA-MM-DD"
-          placeholderTextColor={Colors.light.textSecondary}
-          style={styles.input}
-        />
+        {espacioId ? (
+          <>
+            <Text style={styles.label}>Fecha</Text>
+            <TextInput
+              value={fecha}
+              onChangeText={setFecha}
+              placeholder="AAAA-MM-DD"
+              placeholderTextColor={Colors.light.textSecondary}
+              style={styles.input}
+            />
 
-        <Text style={styles.label}>Motivo</Text>
-        <TextInput
-          value={motivo}
-          onChangeText={setMotivo}
-          placeholder="Ej. mantenimiento"
-          placeholderTextColor={Colors.light.textSecondary}
-          style={styles.input}
-        />
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: diaCompleto }}
+              style={[styles.dayOption, diaCompleto && styles.dayOptionSelected]}
+              onPress={() => setDiaCompleto((actual) => !actual)}
+            >
+              <Text
+                style={[
+                  styles.dayOptionText,
+                  diaCompleto && styles.dayOptionTextSelected,
+                ]}
+              >
+                {diaCompleto
+                  ? "✓ Bloquear el día completo"
+                  : "Bloquear el día completo"}
+              </Text>
+            </Pressable>
 
-        <Text style={styles.helper}>
-          Este bloqueo afecta a todo el día seleccionado para el espacio indicado.
-        </Text>
+            {!diaCompleto ? (
+              <>
+                <Text style={styles.label}>Hora de inicio</Text>
+                <TextInput
+                  value={inicio}
+                  onChangeText={setInicio}
+                  placeholder="09:00"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  style={styles.input}
+                />
+                <Text style={styles.label}>Hora de finalización</Text>
+                <TextInput
+                  value={fin}
+                  onChangeText={setFin}
+                  placeholder="10:00"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  style={styles.input}
+                />
+              </>
+            ) : null}
 
-        <Pressable
-          style={[styles.button, cargando && styles.buttonDisabled]}
-          onPress={() => void confirmarBloqueo()}
-          disabled={cargando}
-        >
-          <Text style={styles.buttonText}>
-            {cargando ? "Registrando..." : "Confirmar bloqueo"}
-          </Text>
-        </Pressable>
+            <Text style={styles.label}>Motivo</Text>
+            <TextInput
+              value={motivo}
+              onChangeText={setMotivo}
+              placeholder="Ej. mantenimiento"
+              placeholderTextColor={Colors.light.textSecondary}
+              style={styles.input}
+            />
+
+            <Text style={styles.helper}>
+              Podés bloquear un horario o el día completo para el espacio
+              seleccionado.
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.button, guardando && styles.buttonDisabled]}
+              onPress={() => void confirmarBloqueo()}
+              disabled={guardando}
+            >
+              <Text style={styles.buttonText}>
+                {guardando ? "Registrando..." : "Confirmar bloqueo"}
+              </Text>
+            </Pressable>
+          </>
+        ) : null}
 
         {mensaje ? <Text style={styles.message}>{mensaje}</Text> : null}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -139,8 +261,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.backgroundElement,
+  },
+  content: {
     padding: 20,
-    justifyContent: "center",
+    paddingBottom: 36,
     gap: 14,
   },
   eyebrow: {
@@ -151,14 +275,14 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
   },
   title: {
+    color: Colors.light.text,
     fontSize: 30,
     fontWeight: "800",
-    color: Colors.light.text,
     fontFamily: Fonts.sans,
   },
   subtitle: {
-    fontSize: 15,
     color: Colors.light.text,
+    fontSize: 15,
     lineHeight: 21,
     fontFamily: Fonts.sans,
   },
@@ -184,14 +308,32 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     color: Colors.light.text,
+    backgroundColor: Colors.light.background,
     fontFamily: Fonts.sans,
+  },
+  dayOption: {
+    borderWidth: 1,
+    borderColor: Colors.light.backgroundElement,
+    borderRadius: 10,
+    padding: 12,
+  },
+  dayOptionSelected: {
+    backgroundColor: Colors.light.backgroundSelected,
+    borderColor: Colors.light.backgroundSelected,
+  },
+  dayOptionText: {
+    color: Colors.light.text,
+    fontFamily: Fonts.sans,
+  },
+  dayOptionTextSelected: {
+    color: Colors.light.background,
+    fontWeight: "800",
   },
   helper: {
     color: Colors.light.textSecondary,
     fontSize: 12,
     lineHeight: 18,
     fontFamily: Fonts.sans,
-    marginTop: 4,
   },
   button: {
     backgroundColor: Colors.light.backgroundSelected,

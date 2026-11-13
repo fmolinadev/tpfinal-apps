@@ -25,6 +25,12 @@ const STAFF_ITEMS: DashboardItem[] = [
     href: "/(staff)/bloqueos",
     icon: "block",
   },
+  {
+    title: "Mantenimiento",
+    description: "Consultar bloqueos y mantenimientos",
+    href: "/(staff)/mantenimiento",
+    icon: "maintenance",
+  },
 ];
 
 export default function StaffInicioScreen() {
