@@ -12,9 +12,9 @@ import {
 
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
-import { apiGet, apiPost } from "@/servicios/api";
-import { actualizarPrecio } from "@/servicios/admin-precios";
 import { crearBloqueo } from "@/servicios/admin-bloqueos";
+import { actualizarPrecio } from "@/servicios/admin-precios";
+import { apiGet, apiPost } from "@/servicios/api";
 
 type TurnoAgenda = {
   id: string;
@@ -295,7 +295,7 @@ export default function AgendaAdminScreen() {
                   : "Bloquear turno"}
               </Text>
 
-              {modal === "precio" ? (
+              {modal === 'precio' ? (
                 <TextInput
                   value={precio}
                   onChangeText={setPrecio}
