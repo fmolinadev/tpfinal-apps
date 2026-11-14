@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Image,
@@ -68,6 +68,9 @@ export default function EspaciosScreen() {
   const [disciplina, setDisciplina] = useState("todas");
   const [fecha, setFecha] = useState(() => inicioDelDia(new Date()));
   const [horarios, setHorarios] = useState<HorarioDisponible[]>([]);
+  const [errorEspacios, setErrorEspacios] = useState<string | null>(null);
+  const [errorHorarios, setErrorHorarios] = useState<string | null>(null);
+  const [intentoCargaHorarios, setIntentoCargaHorarios] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [turnoSeleccionado, setTurnoSeleccionado] =
@@ -77,63 +80,150 @@ export default function EspaciosScreen() {
   const [reservando, setReservando] = useState(false);
   const [mensajeReserva, setMensajeReserva] = useState<string | null>(null);
 
-  useEffect(() => {
-    getEspacios().then((respuesta) => {
-      if (!("error" in respuesta)) setEspacios(respuesta.datos);
+  const cargarEspacios = useCallback(async () => {
+    try {
+      const respuesta = await getEspacios();
+      if ("error" in respuesta && respuesta.error) {
+        setEspacios([]);
+        setErrorEspacios(respuesta.error.mensaje);
+        return;
+      }
+
+      setEspacios(respuesta.datos);
+    } catch (error) {
+      setEspacios([]);
+      setErrorEspacios(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar los espacios.",
+      );
+    } finally {
       setLoading(false);
-    });
+    }
+  }, []);
+
+  function reintentarEspacios() {
+    setLoading(true);
+    setErrorEspacios(null);
+    void cargarEspacios();
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    getEspacios()
+      .then((respuesta) => {
+        if (!active) return;
+        if ("error" in respuesta && respuesta.error) {
+          setEspacios([]);
+          setErrorEspacios(respuesta.error.mensaje);
+          return;
+        }
+
+        setEspacios(respuesta.datos);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setEspacios([]);
+          setErrorEspacios(
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar los espacios.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
     if (vista !== "disponibilidad" || espacios.length === 0) return;
 
+    let active = true;
+
     async function cargarHorarios() {
       setLoadingHorarios(true);
+      setErrorHorarios(null);
       const fechaClave = claveFecha(fecha);
-      const resultados = await Promise.all(
-        espacios.map(async (espacio) => {
-          const respuesta = await getTurnos(
-            espacio.id,
-            fechaIsoParaHora(fecha, 0),
-            fechaIsoParaHora(sumarDias(fecha, 1), 0),
-          );
-          if ("error" in respuesta) return [];
+      try {
+        const resultados = await Promise.all(
+          espacios.map(async (espacio) => {
+            const respuesta = await getTurnos(
+              espacio.id,
+              fechaIsoParaHora(fecha, 0),
+              fechaIsoParaHora(sumarDias(fecha, 1), 0),
+            );
+            if ("error" in respuesta && respuesta.error) {
+              return { horarios: [], error: respuesta.error.mensaje };
+            }
 
-          const turnosPorHora = new Map(
-            respuesta.datos
-              .filter(
-                (turno) =>
-                  claveFecha(new Date(turno.fechaHoraInicio)) === fechaClave,
-              )
-              .map((turno) => [
-                new Date(turno.fechaHoraInicio).getHours(),
-                turno,
-              ]),
-          );
+            const turnosPorHora = new Map(
+              respuesta.datos
+                .filter(
+                  (turno) =>
+                    claveFecha(new Date(turno.fechaHoraInicio)) === fechaClave,
+                )
+                .map((turno) => [
+                  new Date(turno.fechaHoraInicio).getHours(),
+                  turno,
+                ]),
+            );
 
-          return Array.from({ length: 16 }, (_, indice) => {
-            const hora = indice + 8;
-            const turno = turnosPorHora.get(hora) ?? {
-              id: `libre-${espacio.id}-${fechaClave}-${hora}`,
-              espacioId: espacio.id,
-              fechaHoraInicio: fechaIsoParaHora(fecha, hora),
-              estado: "libre" as const,
-              precio: espacio.precioPorHora,
-            };
-            return { espacio, turno };
-          }).filter(
-            ({ turno }) =>
-              turno.estado === "libre" &&
-              new Date(turno.fechaHoraInicio).getTime() > Date.now(),
+            const horariosEspacio = Array.from({ length: 16 }, (_, indice) => {
+              const hora = indice + 8;
+              const turno = turnosPorHora.get(hora) ?? {
+                id: `libre-${espacio.id}-${fechaClave}-${hora}`,
+                espacioId: espacio.id,
+                fechaHoraInicio: fechaIsoParaHora(fecha, hora),
+                estado: "libre" as const,
+                precio: espacio.precioPorHora,
+              };
+              return { espacio, turno };
+            }).filter(
+              ({ turno }) =>
+                turno.estado === "libre" &&
+                new Date(turno.fechaHoraInicio).getTime() > Date.now(),
+            );
+
+            return { horarios: horariosEspacio, error: null };
+          }),
+        );
+
+        if (!active) return;
+
+        const errores = resultados.flatMap((resultado) =>
+          resultado.error ? [resultado.error] : [],
+        );
+        setHorarios(resultados.flatMap((resultado) => resultado.horarios));
+        setErrorHorarios(
+          errores.length > 0
+            ? `No se pudo consultar la disponibilidad de todos los espacios. ${errores[0]}`
+            : null,
+        );
+      } catch (error) {
+        if (active) {
+          setHorarios([]);
+          setErrorHorarios(
+            error instanceof Error
+              ? error.message
+              : "No se pudo cargar la disponibilidad.",
           );
-        }),
-      );
-      setHorarios(resultados.flat());
-      setLoadingHorarios(false);
+        }
+      } finally {
+        if (active) setLoadingHorarios(false);
+      }
     }
 
     void cargarHorarios();
-  }, [espacios, fecha, vista]);
+    return () => {
+      active = false;
+    };
+  }, [espacios, fecha, intentoCargaHorarios, vista]);
 
   const disciplinas = useMemo(
     () => [
@@ -190,7 +280,7 @@ export default function EspaciosScreen() {
       );
 
       setModalVisible(false);
-      router.replace("/(tabs)/reservas");
+      router.replace("/(jugador)/reservas");
     } catch (err) {
       setMensajeReserva(
         err instanceof Error ? err.message : "No se pudo confirmar la reserva.",
@@ -253,14 +343,26 @@ export default function EspaciosScreen() {
         </Pressable>
       </View>
 
-      {vista === "espacios" ? (
+      {vista === "espacios" ? errorEspacios ? (
+        <View style={styles.loadError}>
+          <Text style={styles.errorText}>{errorEspacios}</Text>
+          <Pressable
+            style={styles.retryButton}
+          onPress={reintentarEspacios}
+          >
+            <Text style={styles.retryText}>Reintentar</Text>
+          </Pressable>
+        </View>
+      ) : espacios.length === 0 ? (
+        <Text style={styles.empty}>No hay espacios disponibles.</Text>
+      ) : (
         espacios.map((espacio) => (
           <Pressable
             key={espacio.id}
             style={styles.card}
             onPress={() =>
               router.push({
-                pathname: "/espacio/[id]/disponibilidad",
+                pathname: "/(jugador)/espacio/[id]",
                 params: { id: espacio.id },
               })
             }
@@ -339,33 +441,52 @@ export default function EspaciosScreen() {
               style={styles.loadingInline}
               color={Colors.light.backgroundSelected}
             />
-          ) : horariosFiltrados.length === 0 ? (
-            <Text style={styles.empty}>
-              No hay horarios libres para estos filtros.
-            </Text>
           ) : (
-            horariosFiltrados.map(({ espacio, turno }) => (
-              <Pressable
-                key={`${espacio.id}-${turno.id}`}
-                style={styles.availabilityCard}
-                onPress={() => seleccionarTurno({ espacio, turno })}
-              >
-                <View>
-                  <Text style={styles.cardTitle}>
-                    {formatearHora(turno.fechaHoraInicio)}
-                  </Text>
-                  <Text style={styles.meta}>
-                    {espacio.nombre} · {espacio.deporte}
-                  </Text>
+            <>
+              {errorHorarios ? (
+                <View style={styles.loadError}>
+                  <Text style={styles.errorText}>{errorHorarios}</Text>
+                  <Pressable
+                    style={styles.retryButton}
+                    onPress={() =>
+                      setIntentoCargaHorarios((intento) => intento + 1)
+                    }
+                  >
+                    <Text style={styles.retryText}>Reintentar</Text>
+                  </Pressable>
                 </View>
-                <View style={styles.availabilityRight}>
-                  <Text style={styles.price}>
-                    $ {turno.precio.toLocaleString("es-AR")}
+              ) : null}
+              {horariosFiltrados.length === 0 ? (
+                errorHorarios ? null : (
+                  <Text style={styles.empty}>
+                    No hay horarios libres para estos filtros.
                   </Text>
-                  <Text style={styles.action}>Reservar →</Text>
-                </View>
-              </Pressable>
-            ))
+                )
+              ) : (
+                horariosFiltrados.map(({ espacio, turno }) => (
+                  <Pressable
+                    key={`${espacio.id}-${turno.id}`}
+                    style={styles.availabilityCard}
+                    onPress={() => seleccionarTurno({ espacio, turno })}
+                  >
+                    <View>
+                      <Text style={styles.cardTitle}>
+                        {formatearHora(turno.fechaHoraInicio)}
+                      </Text>
+                      <Text style={styles.meta}>
+                        {espacio.nombre} · {espacio.deporte}
+                      </Text>
+                    </View>
+                    <View style={styles.availabilityRight}>
+                      <Text style={styles.price}>
+                        $ {turno.precio.toLocaleString("es-AR")}
+                      </Text>
+                      <Text style={styles.action}>Reservar →</Text>
+                    </View>
+                  </Pressable>
+                ))
+              )}
+            </>
           )}
         </>
       )}
@@ -567,6 +688,24 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     textAlign: "center",
     paddingVertical: 24,
+    fontFamily: Fonts.sans,
+  },
+  loadError: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.light.background,
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    borderRadius: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.light.backgroundSelected,
+  },
+  retryText: {
+    color: Colors.light.background,
+    fontWeight: "800",
     fontFamily: Fonts.sans,
   },
   availabilityCard: {

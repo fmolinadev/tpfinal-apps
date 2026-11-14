@@ -54,7 +54,7 @@ La disponibilidad y el alcance de cada acción dependen de la pantalla: algunas 
 - **React 19**, **React Native 0.86** y **TypeScript 6**.
 - **expo-secure-store** para guardar el token y el usuario de sesión.
 - **expo-local-authentication** para consultar y ejecutar autenticación biométrica.
-- **expo-sqlite/kv-store** para la caché local de reservas.
+- **expo-sqlite** para las cachés locales de reservas y espacios; **expo-network** para el estado global de conectividad.
 - **expo-notifications** para recordatorios locales.
 - **react-native-qrcode-svg** para mostrar códigos QR.
 - **react-native-maps**, **expo-location**, **expo-camera**, **expo-video** y otros módulos Expo para capacidades nativas previstas o utilizadas por distintas pantallas.
@@ -193,7 +193,8 @@ Los tipos compartidos más nuevos están en `src/tipos/index.ts`: `Espacio`, `Tu
 - **Usuarios, espacios y reservas:** `src/mocks/usuarios.ts`, `src/mocks/index.ts`, además de `src/mocks/espacios.ts` y `src/mocks/reservas.ts`.
 - **Turnos y mantenimiento:** `src/mocks/turnos.ts` y los arreglos de `src/mocks/index.ts`.
 - **Sesión:** Secure Store mediante las funciones de `src/servicios/auth.ts` y `src/persistencia/session.ts`.
-- **Caché de reservas:** `expo-sqlite/kv-store` desde `src/servicios/reservas.ts`. Sirve como respaldo de lectura para la interfaz; las operaciones simuladas no constituyen sincronización real.
+- **Caché offline:** SQLite versionado (`tpfinal-local.db`) guarda reservas separadas por usuario y el catálogo completo de espacios. Los datos KV anteriores de reservas por usuario se migran una vez; la antigua clave global sin propietario se descarta para evitar mezclar cuentas. Las consultas de espacios usan el último catálogo completo guardado como respaldo.
+- **Conectividad:** `expo-network` alimenta el aviso global cuando el dispositivo no tiene conexión o internet alcanzable.
 - **Notificaciones:** `src/servicios/notificaciones.ts` solicita permisos antes de programar recordatorios locales.
 
 Los mocks viven en memoria mientras la aplicación está abierta, salvo los datos explícitamente escritos en almacenamiento local. No representan persistencia multiusuario ni sincronización entre dispositivos.

@@ -13,8 +13,8 @@ import {
 
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
-import { apiPost } from "@/servicios/api";
 import { authenticateWithBiometrics } from "@/servicios/auth";
+import { registrarIngreso } from "@/servicios/ingresos";
 
 export default function EscanerAdminScreen() {
   const router = useRouter();
@@ -95,10 +95,7 @@ export default function EscanerAdminScreen() {
     setMensaje("Registrando ingreso...");
 
     try {
-      await apiPost("/ingresos", {
-        codigoQr,
-        espacioId: espacio,
-      });
+      await registrarIngreso(codigoQr, espacio);
 
       setResultado("permitido");
       setMensaje("INGRESO REGISTRADO CORRECTAMENTE.");

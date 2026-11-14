@@ -4,32 +4,28 @@ import {
     clearSessionUser,
     getSessionToken,
     getSessionUser,
-    isBiometricSupported,
     saveSessionToken,
     saveSessionUser,
 } from "@/servicios/auth";
+import { limpiarCacheReservas } from "@/servicios/reservas";
+import { limpiarRecordatoriosLocales } from "@/servicios/notificaciones";
+import {
+    desregistrarDispositivoPush,
+    registrarDispositivoPushEnSegundoPlano,
+} from "@/servicios/dispositivos";
 
 export async function restoreSession(): Promise<{
   hasSession: boolean;
-  requiresBiometric: boolean;
 }> {
   const token = await getSessionToken();
 
-  if (!token) {
-    return { hasSession: false, requiresBiometric: false };
-  }
-
-  const biometricAvailable = await isBiometricSupported();
-
-  if (biometricAvailable) {
-    return { hasSession: true, requiresBiometric: true };
-  }
-
-  return { hasSession: true, requiresBiometric: false };
+  return { hasSession: token !== null };
 }
 
 export async function finishBiometricLogin(): Promise<boolean> {
-  return authenticateWithBiometrics();
+  const autenticado = await authenticateWithBiometrics();
+  if (autenticado) registrarDispositivoPushEnSegundoPlano();
+  return autenticado;
 }
 
 export async function persistSession(token: string): Promise<void> {
@@ -45,6 +41,19 @@ export async function getCurrentUserSession() {
 }
 
 export async function clearAppSession(): Promise<void> {
-  await clearSessionToken();
-  await clearSessionUser();
+  try {
+    await limpiarCacheReservas();
+  } finally {
+    try {
+      await desregistrarDispositivoPush();
+    } catch (error) {
+      console.error("No se pudo dar de baja el dispositivo de notificaciones.", error);
+    }
+    try {
+      await limpiarRecordatoriosLocales();
+    } catch (error) {
+      console.error("No se pudieron cancelar los recordatorios locales.", error);
+    }
+    await Promise.all([clearSessionToken(), clearSessionUser()]);
+  }
 }

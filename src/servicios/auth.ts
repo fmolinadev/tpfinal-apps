@@ -1,6 +1,7 @@
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 
+import { registrarDispositivoPushEnSegundoPlano } from "@/servicios/dispositivos";
 import { apiPost } from "@/servicios/api";
 import type { LoginInput, RegistroInput, Usuario } from "@/tipos/usuario";
 
@@ -64,6 +65,7 @@ export async function loginUsuario({
 
   await saveSessionToken(token);
   await saveSessionUser(usuario);
+  registrarDispositivoPushEnSegundoPlano();
 
   return { token, usuario };
 }
@@ -87,6 +89,7 @@ export async function verificarContrasena(
 
   await saveSessionToken(respuesta.datos.token);
   await saveSessionUser(respuesta.datos.usuario);
+  registrarDispositivoPushEnSegundoPlano();
 }
 
 export async function registrarUsuario({
@@ -110,6 +113,7 @@ export async function registrarUsuario({
 
   await saveSessionToken(token);
   await saveSessionUser(usuario);
+  registrarDispositivoPushEnSegundoPlano();
 
   return { token, usuario };
 }

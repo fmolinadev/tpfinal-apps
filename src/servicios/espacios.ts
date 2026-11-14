@@ -1,4 +1,14 @@
-import { apiGet } from "@/servicios/api";
+import {
+  ApiError,
+  apiGet,
+  apiGetAll,
+} from "@/servicios/api";
+import {
+  guardarCatalogoEspaciosLocal,
+  guardarEspacioLocal,
+  obtenerCatalogoEspaciosLocal,
+  obtenerEspacioLocal,
+} from "@/persistencia/base-local";
 import type { Deporte, Espacio, RespuestaApi, Superficie } from "@/tipos";
 
 type EspacioApi = {
@@ -19,15 +29,6 @@ type EspacioApi = {
   videoUrl: string | null;
   reglas: string;
   activo: boolean;
-};
-
-type RespuestaListaApi<T> = {
-  datos: T[];
-  meta: {
-    total: number;
-    pagina: number;
-    porPagina: number;
-  };
 };
 
 type RespuestaUnicaApi<T> = {
@@ -88,30 +89,59 @@ function adaptarEspacio(espacio: EspacioApi): Espacio {
   };
 }
 
-function respuestaError(mensaje: string): RespuestaApi<Espacio> {
+function respuestaError(
+  error: unknown,
+  mensajePredeterminado: string,
+): RespuestaApi<Espacio> {
   return {
     error: {
-      codigo: "ERROR_ESPACIOS",
-      mensaje,
+      codigo:
+        error instanceof ApiError && error.codigo
+          ? error.codigo
+          : "ERROR_ESPACIOS",
+      mensaje:
+        error instanceof Error ? error.message : mensajePredeterminado,
     },
   };
 }
 
 export async function getEspacios(): Promise<RespuestaApi<Espacio>> {
   try {
-    const respuesta = await apiGet<RespuestaListaApi<EspacioApi>>(
-      "/espacios",
-    );
+    const espacios = await apiGetAll<EspacioApi>("/espacios");
+    const espaciosAdaptados = espacios.map(adaptarEspacio);
+    try {
+      await guardarCatalogoEspaciosLocal(espaciosAdaptados);
+    } catch (error) {
+      console.warn("No se pudo actualizar el catálogo local de espacios.", error);
+    }
 
     return {
-      datos: respuesta.datos.map(adaptarEspacio),
-      meta: respuesta.meta,
+      datos: espaciosAdaptados,
+      meta: {
+        total: espacios.length,
+        pagina: 1,
+        porPagina: espacios.length,
+      },
     };
   } catch (error) {
+    try {
+      const espaciosLocales = await obtenerCatalogoEspaciosLocal();
+      if (espaciosLocales !== null) {
+        return {
+          datos: espaciosLocales,
+          meta: {
+            total: espaciosLocales.length,
+            pagina: 1,
+            porPagina: espaciosLocales.length,
+          },
+        };
+      }
+    } catch (cacheError) {
+      console.warn("No se pudo leer el catálogo local de espacios.", cacheError);
+    }
     return respuestaError(
-      error instanceof Error
-        ? error.message
-        : "No se pudieron cargar los espacios.",
+      error,
+      "No se pudieron cargar los espacios.",
     );
   }
 }
@@ -123,9 +153,15 @@ export async function getEspacioById(
     const respuesta = await apiGet<RespuestaUnicaApi<EspacioApi>>(
       `/espacios/${id}`,
     );
+    const espacio = adaptarEspacio(respuesta.datos);
+    try {
+      await guardarEspacioLocal(espacio);
+    } catch (error) {
+      console.warn("No se pudo actualizar el espacio en la caché local.", error);
+    }
 
     return {
-      datos: [adaptarEspacio(respuesta.datos)],
+      datos: [espacio],
       meta: {
         total: 1,
         pagina: 1,
@@ -133,10 +169,24 @@ export async function getEspacioById(
       },
     };
   } catch (error) {
+    try {
+      const espacioLocal = await obtenerEspacioLocal(id);
+      if (espacioLocal) {
+        return {
+          datos: [espacioLocal],
+          meta: {
+            total: 1,
+            pagina: 1,
+            porPagina: 1,
+          },
+        };
+      }
+    } catch (cacheError) {
+      console.warn("No se pudo leer el espacio desde la caché local.", cacheError);
+    }
     return respuestaError(
-      error instanceof Error
-        ? error.message
-        : "No se encontró el espacio solicitado.",
+      error,
+      "No se encontró el espacio solicitado.",
     );
   }
 }

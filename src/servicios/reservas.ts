@@ -5,18 +5,23 @@ import type {
   Turno,
 } from "@/tipos";
 import Storage from "expo-sqlite/kv-store";
-import { apiGet, apiPost } from "./api";
+import {
+  guardarReservasLocales,
+  limpiarReservasLocales,
+  obtenerReservasLocales,
+} from "@/persistencia/base-local";
+import {
+  ApiError,
+  apiGetAll,
+  apiPost,
+} from "./api";
+import {
+  cancelarRecordatorioTurno,
+  reconciliarRecordatoriosReservas,
+} from "./notificaciones";
 
-const RESERVAS_CACHE_KEY = "reservas-cache-v1";
-
-type RespuestaListaApi<T> = {
-  datos: T[];
-  meta: {
-    total: number;
-    pagina: number;
-    porPagina: number;
-  };
-};
+const RESERVAS_CACHE_PREFIX = "reservas-cache-v1:";
+const RESERVAS_CACHE_KEY_ANTERIOR = "reservas-cache-v1";
 
 type RespuestaUnoApi<T> = {
   datos: T;
@@ -48,6 +53,16 @@ type ReservaApi = {
   cancelableHasta: string;
 };
 
+export type ReservaAsistencia = {
+  id: string;
+  turnoId: string;
+  espacioId: string;
+  usuarioId: string;
+  cantidadPersonas: number;
+  estado: string;
+  ingresoEn: string | null;
+};
+
 function errorRespuesta(
   mensaje: string,
   codigo = "ERROR_API",
@@ -55,6 +70,37 @@ function errorRespuesta(
   return {
     error: { codigo, mensaje },
   };
+}
+
+function respuestaErrorApi<T>(
+  error: unknown,
+  codigoPredeterminado: string,
+  mensajePredeterminado: string,
+): RespuestaApi<T> {
+  return {
+    error: {
+      codigo:
+        error instanceof ApiError && error.codigo
+          ? error.codigo
+          : codigoPredeterminado,
+      mensaje:
+        error instanceof Error ? error.message : mensajePredeterminado,
+    },
+  };
+}
+
+export async function listarReservasPorFecha(
+  fecha: string,
+): Promise<ReservaAsistencia[]> {
+  return apiGetAll<ReservaAsistencia>(
+    `/reservas?fecha=${encodeURIComponent(fecha)}`,
+  );
+}
+
+export async function marcarReservaAusente(
+  reservaId: string,
+): Promise<void> {
+  await apiPost(`/reservas/${encodeURIComponent(reservaId)}/ausente`);
 }
 
 function fechaClave(fecha: Date): string {
@@ -122,28 +168,28 @@ function adaptarReserva(reserva: ReservaApi): Reserva {
 
 export async function guardarReservasEnCache(
   reservasUsuario: Reserva[],
+  usuarioId: string,
 ): Promise<void> {
-  await Storage.setItem(
-    RESERVAS_CACHE_KEY,
-    JSON.stringify(reservasUsuario),
-  );
+  await guardarReservasLocales(reservasUsuario, usuarioId);
 }
 
-export async function obtenerReservasDesdeCache(): Promise<Reserva[] | null> {
-  const reservasGuardadas = await Storage.getItem(RESERVAS_CACHE_KEY);
+export async function obtenerReservasDesdeCache(
+  usuarioId: string,
+): Promise<Reserva[] | null> {
+  return obtenerReservasLocales(usuarioId);
+}
 
-  if (!reservasGuardadas) {
-    return null;
-  }
+export async function limpiarCacheReservas(): Promise<void> {
+  await limpiarReservasLocales();
+  const claves = await Storage.getAllKeys();
+  const clavesReservas = claves.filter(
+    (clave) =>
+      clave === RESERVAS_CACHE_KEY_ANTERIOR ||
+      clave.startsWith(RESERVAS_CACHE_PREFIX),
+  );
 
-  try {
-    const reservasParseadas: unknown = JSON.parse(reservasGuardadas);
-
-    return Array.isArray(reservasParseadas)
-      ? (reservasParseadas as Reserva[])
-      : null;
-  } catch {
-    return null;
+  if (clavesReservas.length > 0) {
+    await Storage.multiRemove(clavesReservas);
   }
 }
 
@@ -189,14 +235,14 @@ export async function getTurnos(
 
     const respuestas = await Promise.all(
       fechas.map((fecha) =>
-        apiGet<RespuestaListaApi<TurnoApi>>(
+        apiGetAll<TurnoApi>(
           `/espacios/${encodeURIComponent(espacioId)}/turnos?fecha=${fecha}`,
         ),
       ),
     );
 
     const turnos: Turno[] = respuestas.flatMap((respuesta) =>
-      respuesta.datos.map((turno) => ({
+      respuesta.map((turno) => ({
         id: turno.id,
         espacioId: turno.espacioId,
         fechaHoraInicio: `${turno.fecha}T${turno.inicio}:00-03:00`,
@@ -214,15 +260,11 @@ export async function getTurnos(
       },
     };
   } catch (error) {
-    return {
-      error: {
-        codigo: "ERROR_TURNOS",
-        mensaje:
-          error instanceof Error
-            ? error.message
-            : "No se pudieron obtener los turnos.",
-      },
-    };
+    return respuestaErrorApi(
+      error,
+      "ERROR_TURNOS",
+      "No se pudieron obtener los turnos.",
+    );
   }
 }
 
@@ -231,19 +273,16 @@ export async function getMisReservas(
 ): Promise<RespuestaApi<Reserva>> {
   try {
     const [proximas, pasadas] = await Promise.all([
-      apiGet<RespuestaListaApi<ReservaApi>>(
-        "/yo/reservas?cuando=proximas",
-      ),
-      apiGet<RespuestaListaApi<ReservaApi>>(
-        "/yo/reservas?cuando=pasadas",
-      ),
+      apiGetAll<ReservaApi>("/yo/reservas?cuando=proximas"),
+      apiGetAll<ReservaApi>("/yo/reservas?cuando=pasadas"),
     ]);
 
-    const reservasUsuario = [
-      ...proximas.datos,
-      ...pasadas.datos,
-    ].map(adaptarReserva);
-
+    const reservasUsuario = [...proximas, ...pasadas].map(adaptarReserva);
+    try {
+      await reconciliarRecordatoriosReservas(reservasUsuario);
+    } catch (error) {
+      console.warn("No se pudieron reconciliar los recordatorios locales.", error);
+    }
     return {
       datos: reservasUsuario,
       meta: {
@@ -253,15 +292,11 @@ export async function getMisReservas(
       },
     };
   } catch (error) {
-    return {
-      error: {
-        codigo: "ERROR_RESERVAS",
-        mensaje:
-          error instanceof Error
-            ? error.message
-            : "No se pudieron obtener tus reservas.",
-      },
-    };
+    return respuestaErrorApi(
+      error,
+      "ERROR_RESERVAS",
+      "No se pudieron obtener tus reservas.",
+    );
   }
 }
 
@@ -287,26 +322,66 @@ export async function crearReserva(
       },
     };
   } catch (error) {
-    return {
-      error: {
-        codigo: "ERROR_CREAR_RESERVA",
-        mensaje:
-          error instanceof Error
-            ? error.message
-            : "No se pudo crear la reserva.",
-      },
-    };
+    return respuestaErrorApi(
+      error,
+      "ERROR_CREAR_RESERVA",
+      "No se pudo crear la reserva.",
+    );
   }
 }
 
 export async function validarAccesoPorQrEspacio(
-  _espacioId: string,
-  _usuarioId: string,
-  _ahora = Date.now(),
+  espacioId: string,
+  usuarioId: string,
+  ahora = Date.now(),
 ): Promise<RespuestaApi<Reserva>> {
+  const espacioIdNormalizado = espacioId.trim();
+  if (!/^esp-[A-Za-z0-9_-]{1,36}$/.test(espacioIdNormalizado)) {
+    return errorRespuesta("El código no corresponde a un espacio válido.", "CODIGO_INVALIDO");
+  }
+
+  const respuesta = await getMisReservas(usuarioId);
+  if ("error" in respuesta && respuesta.error) return respuesta;
+
+  const reservasActivas = respuesta.datos.filter(
+    (reserva) =>
+      reserva.usuarioId === usuarioId &&
+      (reserva.estado === "activa" || reserva.estado === "confirmada"),
+  );
+  const reservaValida = reservasActivas.find((reserva) => {
+    if (reserva.espacioId !== espacioIdNormalizado) return false;
+    const inicio = new Date(reserva.fechaHoraInicio).getTime();
+    return (
+      Number.isFinite(inicio) &&
+      inicio - 30 * 60 * 1000 <= ahora &&
+      ahora < inicio + 60 * 60 * 1000
+    );
+  });
+
+  if (reservaValida) {
+    return {
+      datos: [reservaValida],
+      meta: { total: 1, pagina: 1, porPagina: 1 },
+    };
+  }
+
+  if (reservasActivas.some((reserva) => reserva.espacioId === espacioIdNormalizado)) {
+    return errorRespuesta(
+      "Tu reserva para esta cancha todavía no está dentro del horario de ingreso.",
+      "FUERA_DE_HORARIO",
+    );
+  }
+
+  if (reservasActivas.length > 0) {
+    return errorRespuesta(
+      "No tenés una reserva activa para esta cancha.",
+      "CODIGO_DE_OTRO_ESPACIO",
+    );
+  }
+
   return errorRespuesta(
-    "La validación del QR de espacios para jugadores no está disponible en la API.",
-    "FUNCIONALIDAD_NO_DISPONIBLE",
+    "No encontramos una reserva activa para esta cancha.",
+    "RESERVA_NO_ENCONTRADA",
   );
 }
 
@@ -317,9 +392,15 @@ export async function cancelarReserva(
     const respuesta = await apiPost<RespuestaUnoApi<ReservaApi>>(
       `/reservas/${encodeURIComponent(reservaId)}/cancelacion`,
     );
+    const reservaCancelada = adaptarReserva(respuesta.datos);
+    try {
+      await cancelarRecordatorioTurno(reservaId);
+    } catch (error) {
+      console.warn("No se pudo cancelar el recordatorio local.", error);
+    }
 
     return {
-      datos: [adaptarReserva(respuesta.datos)],
+      datos: [reservaCancelada],
       meta: {
         total: 1,
         pagina: 1,
@@ -327,14 +408,10 @@ export async function cancelarReserva(
       },
     };
   } catch (error) {
-    return {
-      error: {
-        codigo: "ERROR_CANCELAR_RESERVA",
-        mensaje:
-          error instanceof Error
-            ? error.message
-            : "No se pudo cancelar la reserva.",
-      },
-    };
+    return respuestaErrorApi(
+      error,
+      "ERROR_CANCELAR_RESERVA",
+      "No se pudo cancelar la reserva.",
+    );
   }
 }

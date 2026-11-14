@@ -1,6 +1,13 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
 import { clearAppSession, getCurrentUserSession } from "@/persistencia/session";
@@ -15,8 +22,18 @@ export default function PerfilScreen() {
   }, []);
 
   async function cerrarSesion() {
-    await clearAppSession();
-    router.replace("/(auth)/login");
+    try {
+      await clearAppSession();
+    } catch (error) {
+      Alert.alert(
+        "Sesión cerrada",
+        error instanceof Error
+          ? `No se pudo borrar toda la caché local: ${error.message}`
+          : "No se pudo borrar toda la caché local.",
+      );
+    } finally {
+      router.replace("/(auth)/login");
+    }
   }
 
   return (

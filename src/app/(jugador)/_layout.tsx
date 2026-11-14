@@ -9,6 +9,7 @@ export default function JugadorLayout() {
       <Tabs screenOptions={{ headerShown: false }}>
         <Tabs.Screen name="inicio" options={{ title: "Inicio" }} />
         <Tabs.Screen name="espacios" options={{ title: "Espacios" }} />
+        <Tabs.Screen name="mapa" options={{ title: "Mapa", href: null }} />
         <Tabs.Screen
           name="escanear"
           options={{
@@ -40,11 +41,27 @@ export default function JugadorLayout() {
         />
         <Tabs.Screen
           name="espacio/[id]"
-          options={{ title: "Espacio", href: null }}
+          options={{
+            title: "Espacio",
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
+        />
+        <Tabs.Screen
+          name="espacio/[id]/disponibilidad"
+          options={{
+            title: "Disponibilidad",
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
         />
         <Tabs.Screen
           name="reserva/[id]"
-          options={{ title: "Reserva", href: null }}
+          options={{
+            title: "Reserva",
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
         />
       </Tabs>
     </AuthGuard>

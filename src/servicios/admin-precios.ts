@@ -1,8 +1,9 @@
-import { apiPatch } from "@/servicios/api";
+import { ApiError, apiPatch } from "@/servicios/api";
 
 export type ResultadoPrecio = {
   ok: boolean;
   mensaje: string;
+  codigo?: string;
 };
 
 export async function actualizarPrecio(
@@ -28,6 +29,7 @@ export async function actualizarPrecio(
   } catch (error) {
     return {
       ok: false,
+      codigo: error instanceof ApiError ? error.codigo : undefined,
       mensaje:
         error instanceof Error
           ? error.message

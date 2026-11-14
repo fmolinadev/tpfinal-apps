@@ -12,30 +12,10 @@ import {
 
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
-import { apiGet, apiPost } from "@/servicios/api";
 import { actualizarPrecio } from "@/servicios/admin-precios";
 import { crearBloqueo } from "@/servicios/admin-bloqueos";
-
-type TurnoAgenda = {
-  id: string;
-  espacioId: string;
-  fecha: string;
-  inicio: string;
-  fin: string;
-  estado: "libre" | "reservado" | "fijo" | "mantenimiento";
-  reservaId: string | null;
-  motivoBloqueo: string | null;
-  precio: number;
-};
-
-type RespuestaLista<T> = {
-  datos: T[];
-  meta: {
-    total: number;
-    pagina: number;
-    porPagina: number;
-  };
-};
+import { marcarReservaAusente } from "@/servicios/reservas";
+import { obtenerAgenda, type TurnoAgenda } from "@/servicios/turnos";
 
 function claveFecha(fecha: Date): string {
   const year = fecha.getFullYear();
@@ -47,6 +27,7 @@ function claveFecha(fecha: Date): string {
 export default function AgendaAdminScreen() {
   const [turnosDelDia, setTurnosDelDia] = useState<TurnoAgenda[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
@@ -60,19 +41,16 @@ export default function AgendaAdminScreen() {
   const hoy = claveFecha(new Date());
 
   const cargarAgenda = useCallback(async () => {
-    setLoading(true);
-
     try {
-      const respuesta = await apiGet<RespuestaLista<TurnoAgenda>>(
-        `/agenda?fecha=${hoy}&porPagina=500`,
-      );
-
-      const ordenados = [...respuesta.datos].sort((a, b) =>
+      const turnos = await obtenerAgenda(hoy);
+      const ordenados = [...turnos].sort((a, b) =>
         a.inicio.localeCompare(b.inicio),
       );
 
+      setErrorCarga(false);
       setTurnosDelDia(ordenados);
     } catch (error) {
+      setErrorCarga(true);
       setMensaje(
         error instanceof Error
           ? error.message
@@ -84,8 +62,35 @@ export default function AgendaAdminScreen() {
   }, [hoy]);
 
   useEffect(() => {
-    void cargarAgenda();
-  }, [cargarAgenda]);
+    let active = true;
+
+    obtenerAgenda(hoy)
+      .then((turnos) => {
+        if (active) {
+          setErrorCarga(false);
+          setTurnosDelDia(
+            [...turnos].sort((a, b) => a.inicio.localeCompare(b.inicio)),
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorCarga(true);
+          setMensaje(
+            error instanceof Error
+              ? error.message
+              : "No se pudo cargar la agenda.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hoy]);
 
   async function cambiarPrecio() {
     if (!turnoSeleccionado) return;
@@ -153,7 +158,7 @@ export default function AgendaAdminScreen() {
     setProcesando(true);
 
     try {
-      await apiPost(`/reservas/${reservaId}/ausente`);
+      await marcarReservaAusente(reservaId);
 
       setMensaje("La ausencia fue registrada correctamente.");
       await cargarAgenda();
@@ -194,7 +199,7 @@ export default function AgendaAdminScreen() {
               />
               <Text style={styles.bodyText}>Cargando agenda...</Text>
             </View>
-          ) : turnosDelDia.length === 0 ? (
+          ) : errorCarga ? null : turnosDelDia.length === 0 ? (
             <Text style={styles.bodyText}>
               No hay turnos cargados para hoy.
             </Text>

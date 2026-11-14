@@ -23,8 +23,6 @@ export default function StaffLayout() {
         <Tabs.Screen name="mantenimiento" options={{ href: null }} />
         <Tabs.Screen name="bloqueos" options={{ href: null }} />
         <Tabs.Screen name="escanear" options={{ href: null }} />
-        <Tabs.Screen name="precios" options={{ href: null }} />
-        <Tabs.Screen name="reservas-fijas" options={{ href: null }} />
       </Tabs>
     </AuthGuard>
   );

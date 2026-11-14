@@ -1,9 +1,10 @@
-import { useFocusEffect, useRouter, useSegments } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { getSessionToken, getSessionUser } from "@/servicios/auth";
 import type { RolUsuario } from "@/tipos/usuario";
+import { rutaInicioPorRol } from "@/utilidades/rutas";
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -12,7 +13,6 @@ type AuthGuardProps = {
 
 export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   const router = useRouter();
-  const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
 
   useFocusEffect(
@@ -22,38 +22,17 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
       async function verifyAccess() {
         const token = await getSessionToken();
         const user = await getSessionUser();
-        const inJugadorRoute = segments[0] === "(jugador)";
-        const inStaffRoute = segments[0] === "(staff)";
+        if (!active) {
+          return;
+        }
 
-        if (!token || !user) {
+        if (!token || !user || !user.rol) {
           router.replace("/(auth)/login");
           return;
         }
 
-        if (allowedRoles && !allowedRoles.includes(user.rol ?? "jugador")) {
-          if (user.rol === "jugador") {
-            router.replace("/(jugador)/inicio");
-          } else if (user.rol === "administrador") {
-            router.replace("/(admin)/agenda");
-          } else if (user.rol === "encargado") {
-            router.replace("/(staff)/agenda");
-          } else {
-            router.replace("/(auth)/login");
-          }
-          return;
-        }
-
-        if (inJugadorRoute && user.rol !== "jugador") {
-          router.replace(
-            user.rol === "administrador"
-              ? "/(admin)/agenda"
-              : "/(staff)/agenda",
-          );
-          return;
-        }
-
-        if (inStaffRoute && user.rol === "jugador") {
-          router.replace("/(jugador)/inicio");
+        if (allowedRoles && !allowedRoles.includes(user.rol)) {
+          router.replace(rutaInicioPorRol(user.rol));
           return;
         }
 
@@ -67,7 +46,7 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
       return () => {
         active = false;
       };
-    }, [allowedRoles, router, segments]),
+    }, [allowedRoles, router]),
   );
 
   if (!isReady) {

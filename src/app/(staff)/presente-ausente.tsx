@@ -9,26 +9,11 @@ import {
 } from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
-import { apiGet, apiPost } from "@/servicios/api";
-
-type ReservaStaff = {
-  id: string;
-  turnoId: string;
-  espacioId: string;
-  usuarioId: string;
-  cantidadPersonas: number;
-  estado: string;
-  ingresoEn: string | null;
-};
-
-type RespuestaLista<T> = {
-  datos: T[];
-  meta: {
-    total: number;
-    pagina: number;
-    porPagina: number;
-  };
-};
+import {
+  listarReservasPorFecha,
+  marcarReservaAusente,
+  type ReservaAsistencia,
+} from "@/servicios/reservas";
 
 function nombreEstado(estado: string): string {
   const normalizado = estado.toLowerCase();
@@ -47,8 +32,17 @@ function nombreEstado(estado: string): string {
   }
 }
 
+function fechaHoy(): string {
+  const hoy = new Date();
+  const anio = hoy.getFullYear();
+  const mes = String(hoy.getMonth() + 1).padStart(2, "0");
+  const dia = String(hoy.getDate()).padStart(2, "0");
+
+  return `${anio}-${mes}-${dia}`;
+}
+
 export default function PresenteAusenteScreen() {
-  const [reservas, setReservas] = useState<ReservaStaff[]>([]);
+  const [reservas, setReservas] = useState<ReservaAsistencia[]>([]);
   const [cargando, setCargando] = useState(true);
   const [reservaProcesando, setReservaProcesando] = useState<string | null>(
     null,
@@ -57,14 +51,7 @@ export default function PresenteAusenteScreen() {
 
   const cargarReservas = useCallback(async () => {
     try {
-      setCargando(true);
-      setMensaje(null);
-
-      const respuesta = await apiGet<RespuestaLista<ReservaStaff>>(
-        "/reservas?porPagina=500",
-      );
-
-      setReservas(respuesta.datos);
+      setReservas(await listarReservasPorFecha(fechaHoy()));
     } catch (error) {
       setMensaje(
         error instanceof Error
@@ -76,16 +63,43 @@ export default function PresenteAusenteScreen() {
     }
   }, []);
 
-  useEffect(() => {
+  function actualizarReservas() {
+    setCargando(true);
+    setMensaje(null);
     void cargarReservas();
-  }, [cargarReservas]);
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    listarReservasPorFecha(fechaHoy())
+      .then((datos) => {
+        if (active) setReservas(datos);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setMensaje(
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar las reservas.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCargando(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function marcarAusente(reservaId: string) {
     try {
       setReservaProcesando(reservaId);
       setMensaje(null);
 
-      await apiPost(`/reservas/${reservaId}/ausente`);
+      await marcarReservaAusente(reservaId);
 
       setMensaje("La ausencia se registró correctamente.");
       await cargarReservas();
@@ -116,7 +130,7 @@ export default function PresenteAusenteScreen() {
 
       <Pressable
         style={styles.refreshButton}
-        onPress={() => void cargarReservas()}
+        onPress={actualizarReservas}
         disabled={cargando}
       >
         <Text style={styles.refreshText}>

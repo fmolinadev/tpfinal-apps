@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { registrarUsuario } from "@/servicios/auth";
+import { rutaInicioPorRol } from "@/utilidades/rutas";
 
 export default function RegistroScreen() {
   const router = useRouter();
@@ -32,14 +33,7 @@ export default function RegistroScreen() {
       });
       Alert.alert("Registro exitoso", "Tu cuenta fue creada correctamente.");
 
-      if (usuario.rol === "jugador") {
-        router.replace("/(jugador)/inicio");
-        return;
-      }
-
-      router.replace(
-        usuario.rol === "administrador" ? "/(admin)/agenda" : "/(staff)/agenda",
-      );
+      router.replace(rutaInicioPorRol(usuario.rol));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo crear la cuenta.";
@@ -67,7 +61,11 @@ export default function RegistroScreen() {
           value={nombre}
           onChangeText={setNombre}
           style={styles.input}
-          placeholder="Tu nombre"
+          placeholder="Ej.: María Pérez"
+          autoCapitalize="words"
+          autoComplete="name"
+          textContentType="name"
+          returnKeyType="next"
         />
 
         <Text style={styles.label}>Email</Text>
@@ -78,6 +76,10 @@ export default function RegistroScreen() {
           placeholder="usuario@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
         />
 
         <Text style={styles.label}>Teléfono</Text>
@@ -87,6 +89,9 @@ export default function RegistroScreen() {
           style={styles.input}
           placeholder="+54 9 11 1234 5678"
           keyboardType="phone-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          returnKeyType="next"
         />
 
         <Text style={styles.label}>Contraseña</Text>
@@ -94,8 +99,11 @@ export default function RegistroScreen() {
           value={password}
           onChangeText={setPassword}
           style={styles.input}
-          placeholder="••••••••"
+          placeholder="Creá una contraseña"
           secureTextEntry
+          autoComplete="new-password"
+          textContentType="newPassword"
+          returnKeyType="done"
         />
 
         <Pressable

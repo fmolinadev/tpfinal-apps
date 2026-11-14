@@ -12,37 +12,14 @@ import {
 import { AuthGuard } from "@/components/auth-guard";
 import { Colors, Fonts } from "@/constants/theme";
 import {
-  apiDelete,
-  apiGet,
-  apiPatch,
-  apiPost,
-} from "@/servicios/api";
-
-type ReservaFijaApi = {
-  id: string;
-  espacioId: string;
-  titular: string;
-  dia: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  inicio: string;
-  fin: string;
-  desde: string;
-  hasta: string | null;
-  activa: boolean;
-};
-
-type EspacioApi = {
-  id: string;
-  nombre: string;
-};
-
-type RespuestaLista<T> = {
-  datos: T[];
-  meta: {
-    total: number;
-    pagina: number;
-    porPagina: number;
-  };
-};
+  actualizarReservaFija,
+  crearReservaFija,
+  eliminarReservaFija,
+  listarEspaciosReservaFija,
+  listarReservasFijas,
+  type EspacioReservaFija,
+  type ReservaFija,
+} from "@/servicios/admin-reservas-fijas";
 
 type FormularioReservaFija = {
   espacioId: string;
@@ -79,8 +56,8 @@ const diasSemana = [
 export default function ReservasFijasAdminScreen() {
   const router = useRouter();
 
-  const [reservas, setReservas] = useState<ReservaFijaApi[]>([]);
-  const [espacios, setEspacios] = useState<EspacioApi[]>([]);
+  const [reservas, setReservas] = useState<ReservaFija[]>([]);
+  const [espacios, setEspacios] = useState<EspacioReservaFija[]>([]);
   const [formulario, setFormulario] =
     useState<FormularioReservaFija>(formularioInicial);
 
@@ -90,22 +67,20 @@ export default function ReservasFijasAdminScreen() {
   const [guardando, setGuardando] = useState(false);
 
   const cargarDatos = useCallback(async () => {
-    setCargando(true);
-
     try {
       const [respuestaFijas, respuestaEspacios] = await Promise.all([
-        apiGet<RespuestaLista<ReservaFijaApi>>("/fijas"),
-        apiGet<RespuestaLista<EspacioApi>>("/espacios"),
+        listarReservasFijas(),
+        listarEspaciosReservaFija(),
       ]);
 
-      setReservas(respuestaFijas.datos);
-      setEspacios(respuestaEspacios.datos);
+      setReservas(respuestaFijas);
+      setEspacios(respuestaEspacios);
 
       setFormulario((actual) => ({
         ...actual,
         espacioId:
           actual.espacioId ||
-          respuestaEspacios.datos[0]?.id ||
+          respuestaEspacios[0]?.id ||
           "",
       }));
     } catch (error) {
@@ -120,8 +95,36 @@ export default function ReservasFijasAdminScreen() {
   }, []);
 
   useEffect(() => {
-    void cargarDatos();
-  }, [cargarDatos]);
+    let active = true;
+
+    Promise.all([listarReservasFijas(), listarEspaciosReservaFija()])
+      .then(([reservasIniciales, espaciosIniciales]) => {
+        if (!active) return;
+
+        setReservas(reservasIniciales);
+        setEspacios(espaciosIniciales);
+        setFormulario((actual) => ({
+          ...actual,
+          espacioId: actual.espacioId || espaciosIniciales[0]?.id || "",
+        }));
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setMensaje(
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar las reservas fijas.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCargando(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function actualizarCampo(
     campo: keyof FormularioReservaFija,
@@ -133,7 +136,7 @@ export default function ReservasFijasAdminScreen() {
     }));
   }
 
-  function comenzarEdicion(item: ReservaFijaApi) {
+  function comenzarEdicion(item: ReservaFija) {
     setEditando(item.id);
 
     setFormulario({
@@ -202,13 +205,10 @@ export default function ReservasFijasAdminScreen() {
 
     try {
       if (editando) {
-        await apiPatch(`/fijas/${editando}`, datos);
+        await actualizarReservaFija(editando, datos);
         setMensaje("Reserva fija actualizada correctamente.");
       } else {
-        await apiPost("/fijas", {
-          espacioId: formulario.espacioId,
-          ...datos,
-        });
+        await crearReservaFija(formulario.espacioId, datos);
         setMensaje("Reserva fija creada correctamente.");
       }
 
@@ -234,7 +234,7 @@ export default function ReservasFijasAdminScreen() {
     setMensaje(null);
 
     try {
-      await apiDelete(`/fijas/${id}`);
+      await eliminarReservaFija(id);
 
       if (editando === id) {
         limpiarFormulario();

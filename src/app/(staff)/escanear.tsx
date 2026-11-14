@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Haptics from "expo-haptics";
+import { useRef, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -8,48 +10,93 @@ import {
 } from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
-import { apiPost } from "@/servicios/api";
+import { registrarIngreso as crearIngreso } from "@/servicios/ingresos";
 
 export default function EscanearScreen() {
+  const [permission, requestPermission] = useCameraPermissions();
   const [codigo, setCodigo] = useState("");
   const [espacioId, setEspacioId] = useState("");
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [registrando, setRegistrando] = useState(false);
+  const [escaneando, setEscaneando] = useState(false);
+  const procesandoRef = useRef(false);
 
-  async function registrarIngreso() {
-    const codigoQr = codigo.trim();
+  async function reproducirFeedbackHaptico(exito: boolean) {
+    try {
+      await Haptics.notificationAsync(
+        exito
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Error,
+      );
+    } catch (error) {
+      console.warn("No se pudo reproducir la respuesta háptica.", error);
+    }
+  }
+
+  async function registrarIngreso(codigoLeido = codigo) {
+    if (procesandoRef.current) return;
+
+    const codigoQr = codigoLeido.trim();
     const espacio = espacioId.trim();
 
     setMensaje(null);
 
     if (!codigoQr) {
       setMensaje("Ingresá el código QR de la reserva.");
+      await reproducirFeedbackHaptico(false);
       return;
     }
 
     if (!/^esp-[A-Za-z0-9_-]{1,36}$/.test(espacio)) {
       setMensaje("Ingresá un ID de espacio válido. Debe comenzar con esp-.");
+      await reproducirFeedbackHaptico(false);
       return;
     }
 
     try {
+      procesandoRef.current = true;
       setRegistrando(true);
+      setEscaneando(false);
 
-      await apiPost("/ingresos", {
-        codigoQr,
-        espacioId: espacio,
-      });
+      await crearIngreso(codigoQr, espacio);
 
       setMensaje("Ingreso registrado correctamente.");
       setCodigo("");
+      await reproducirFeedbackHaptico(true);
     } catch (error) {
       setMensaje(
         error instanceof Error
           ? error.message
           : "No se pudo registrar el ingreso.",
       );
+      await reproducirFeedbackHaptico(false);
     } finally {
+      procesandoRef.current = false;
       setRegistrando(false);
+    }
+  }
+
+  async function abrirCamara() {
+    try {
+      const permiso = permission?.granted
+        ? permission
+        : await requestPermission();
+
+      if (!permiso.granted) {
+        setMensaje("Se necesita permiso de cámara para leer el código QR.");
+        await reproducirFeedbackHaptico(false);
+        return;
+      }
+
+      setMensaje("Apuntá al código QR de la reserva.");
+      setEscaneando(true);
+    } catch (error) {
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "No se pudo habilitar la cámara.",
+      );
+      await reproducirFeedbackHaptico(false);
     }
   }
 
@@ -58,25 +105,30 @@ export default function EscanearScreen() {
       <Text style={styles.eyebrow}>CONTROL DE INGRESO</Text>
       <Text style={styles.title}>Registrar ingreso</Text>
       <Text style={styles.subtitle}>
-        Ingresá el código QR presentado por el jugador y el espacio
-        correspondiente para registrar su acceso.
+        Escaneá el QR de la reserva e indicá el espacio para registrar el
+        ingreso del jugador.
       </Text>
 
       <View style={styles.scanBox}>
-        <Text style={styles.scanIcon}>QR</Text>
-        <Text style={styles.scanText}>Registro de acceso</Text>
+        {escaneando && permission?.granted ? (
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={({ data }) => {
+              setEscaneando(false);
+              void registrarIngreso(data);
+            }}
+          />
+        ) : (
+          <>
+            <Text style={styles.scanIcon}>QR</Text>
+            <Text style={styles.scanText}>
+              {registrando ? "Registrando ingreso..." : "Registro de acceso"}
+            </Text>
+          </>
+        )}
       </View>
-
-      <Text style={styles.label}>Código QR</Text>
-      <TextInput
-        value={codigo}
-        onChangeText={setCodigo}
-        placeholder="Código QR de la reserva"
-        placeholderTextColor={Colors.light.textSecondary}
-        style={styles.input}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
 
       <Text style={styles.label}>ID del espacio</Text>
       <TextInput
@@ -90,12 +142,33 @@ export default function EscanearScreen() {
       />
 
       <Pressable
-        style={[styles.button, registrando && styles.disabled]}
-        disabled={registrando}
-        onPress={() => void registrarIngreso()}
+        style={[styles.button, (registrando || escaneando) && styles.disabled]}
+        disabled={registrando || escaneando}
+        onPress={() => void abrirCamara()}
       >
         <Text style={styles.buttonText}>
-          {registrando ? "Registrando..." : "Registrar ingreso"}
+          {escaneando ? "Escaneando..." : "Abrir cámara y escanear QR"}
+        </Text>
+      </Pressable>
+
+      <Text style={styles.label}>O ingresá el código manualmente</Text>
+      <TextInput
+        value={codigo}
+        onChangeText={setCodigo}
+        placeholder="Código QR de la reserva"
+        placeholderTextColor={Colors.light.textSecondary}
+        style={styles.input}
+        autoCapitalize="characters"
+        autoCorrect={false}
+      />
+
+      <Pressable
+        style={[styles.button, registrando && styles.disabled]}
+        disabled={registrando}
+        onPress={() => void registrarIngreso(codigo)}
+      >
+        <Text style={styles.buttonText}>
+          {registrando ? "Registrando..." : "Registrar código manual"}
         </Text>
       </Pressable>
 
@@ -137,6 +210,7 @@ const styles = StyleSheet.create({
   },
   scanBox: {
     height: 150,
+    overflow: "hidden",
     borderRadius: 18,
     borderWidth: 2,
     borderColor: Colors.light.backgroundSelected,

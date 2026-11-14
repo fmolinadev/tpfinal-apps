@@ -1,7 +1,6 @@
-import { Link, useRouter } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
     Image,
     Pressable,
     StyleSheet,
@@ -11,33 +10,39 @@ import {
 } from "react-native";
 
 import { loginUsuario } from "@/servicios/auth";
+import { rutaInicioPorRol } from "@/utilidades/rutas";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState("demo@tpfinal.com");
-  const [password, setPassword] = useState("123456");
+  const parametros = useLocalSearchParams<{ motivo?: string | string[] }>();
+  const motivo = Array.isArray(parametros.motivo)
+    ? parametros.motivo[0]
+    : parametros.motivo;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorLogin, setErrorLogin] = useState<string | null>(null);
+
+  const errorVisible =
+    errorLogin ??
+    (motivo === "sesion-expirada"
+      ? "Tu sesión venció. Ingresá nuevamente para continuar."
+      : null);
 
   async function handleLogin() {
     try {
       setLoading(true);
+      setErrorLogin(null);
       const { token, usuario } = await loginUsuario({ email, password });
       if (!token) {
         throw new Error("No se generó una sesión válida.");
       }
 
-      if (usuario.rol === "jugador") {
-        router.replace("/(jugador)/inicio");
-        return;
-      }
-
-      router.replace(
-        usuario.rol === "administrador" ? "/(admin)/agenda" : "/(staff)/agenda",
-      );
+      router.replace(rutaInicioPorRol(usuario.rol));
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Ocurrió un error inesperado.";
-      Alert.alert("Error de acceso", message);
+      setErrorLogin(
+        error instanceof Error ? error.message : "Ocurrió un error inesperado.",
+      );
     } finally {
       setLoading(false);
     }
@@ -60,25 +65,44 @@ export default function LoginScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
           value={email}
-          onChangeText={setEmail}
-          placeholder="usuario@email.com"
+          onChangeText={(valor) => {
+            setEmail(valor);
+            setErrorLogin(null);
+          }}
+          placeholder="Ingresá tu email"
           style={styles.input}
         />
 
         <Text style={styles.label}>Contraseña</Text>
         <TextInput
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="go"
           value={password}
-          onChangeText={setPassword}
-          placeholder="••••••••"
+          onChangeText={(valor) => {
+            setPassword(valor);
+            setErrorLogin(null);
+          }}
+          onSubmitEditing={() => void handleLogin()}
+          placeholder="Ingresá tu contraseña"
           secureTextEntry
           style={styles.input}
         />
 
+        {errorVisible ? (
+          <Text style={styles.error} accessibilityLiveRegion="polite">
+            {errorVisible}
+          </Text>
+        ) : null}
+
         <Pressable
-          style={styles.button}
+          style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
-          disabled={loading}
+          disabled={loading || !email.trim() || !password}
         >
           <Text style={styles.buttonText}>
             {loading ? "Ingresando..." : "Entrar"}
@@ -149,10 +173,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: {
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  error: {
+    color: "#b42318",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14,
   },
   linkButton: {
     marginTop: 16,

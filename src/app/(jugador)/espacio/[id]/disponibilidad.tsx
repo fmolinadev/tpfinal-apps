@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -13,6 +13,7 @@ import {
 
 import { Colors, Fonts } from "@/constants/theme";
 import { getCurrentUserSession } from "@/persistencia/session";
+import { ApiError } from "@/servicios/api";
 import { getEspacioById } from "@/servicios/espacios";
 import { programarRecordatorioTurno } from "@/servicios/notificaciones";
 import { crearReserva, getTurnos } from "@/servicios/reservas";
@@ -97,10 +98,14 @@ export default function DisponibilidadEspacioScreen() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() =>
     inicioDelDia(new Date()),
   );
+  const [intentoCarga, setIntentoCarga] = useState(0);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [espacio, setEspacio] = useState<Espacio | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    mensaje: string;
+    codigo?: string;
+  } | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<Turno | null>(
     null,
@@ -117,69 +122,101 @@ export default function DisponibilidadEspacioScreen() {
     [fechaSeleccionada],
   );
 
-  async function cargarDisponibilidad() {
+  const cargarDisponibilidad = useCallback(async () => {
     if (!espacioId) {
-      setError("No se recibió el espacio a consultar.");
-      setLoading(false);
+      throw new Error("No se recibió el espacio a consultar.");
+    }
+
+    const fechaFin = sumarDias(fechaSeleccionada, 1);
+
+    const [respuestaTurnos, respuestaEspacio] = await Promise.all([
+      getTurnos(
+        espacioId,
+        fechaIsoParaHora(fechaSeleccionada, 0),
+        fechaIsoParaHora(fechaFin, 0),
+      ),
+      getEspacioById(espacioId),
+    ]);
+
+    if ("error" in respuestaTurnos && respuestaTurnos.error) {
+      throw new ApiError(
+        respuestaTurnos.error.mensaje,
+        0,
+        respuestaTurnos.error.codigo,
+      );
+    }
+
+    if ("error" in respuestaEspacio && respuestaEspacio.error) {
+      throw new ApiError(
+        respuestaEspacio.error.mensaje,
+        0,
+        respuestaEspacio.error.codigo,
+      );
+    }
+
+    const turnosDelDia = respuestaTurnos.datos.filter(
+      (turno) =>
+        claveFecha(new Date(turno.fechaHoraInicio)) ===
+        claveFecha(fechaSeleccionada),
+    );
+
+    return {
+      espacio: respuestaEspacio.datos[0] ?? null,
+      turnos: turnosDelDia.filter(
+        (turno) => !esTurnoPasado(turno.fechaHoraInicio),
+      ),
+    };
+  }, [espacioId, fechaSeleccionada]);
+
+  useEffect(() => {
+    if (!espacioId) {
       return;
     }
 
-    setLoading(true);
+    let active = true;
+
+    cargarDisponibilidad()
+      .then((resultado) => {
+        if (active) {
+          setError(null);
+          setEspacio(resultado.espacio);
+          setTurnos(resultado.turnos);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError({
+            mensaje:
+              err instanceof Error
+                ? err.message
+                : "No se pudo cargar la disponibilidad.",
+            codigo: err instanceof ApiError ? err.codigo : undefined,
+          });
+          setTurnos([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [cargarDisponibilidad, intentoCarga, espacioId]);
+
+  function cambiarFecha(fecha: Date) {
     setError(null);
-
-    try {
-      const fechaFin = sumarDias(fechaSeleccionada, 1);
-
-      const [respuestaTurnos, respuestaEspacio] = await Promise.all([
-        getTurnos(
-          espacioId,
-          fechaIsoParaHora(fechaSeleccionada, 0),
-          fechaIsoParaHora(fechaFin, 0),
-        ),
-        getEspacioById(espacioId),
-      ]);
-
-      if ("error" in respuestaTurnos && respuestaTurnos.error) {
-        setError(respuestaTurnos.error.mensaje);
-        setTurnos([]);
-        return;
-      }
-
-      if ("error" in respuestaEspacio && respuestaEspacio.error) {
-        setError(respuestaEspacio.error.mensaje);
-        setTurnos([]);
-        return;
-      }
-
-      const espacioActual = respuestaEspacio.datos[0] ?? null;
-      setEspacio(espacioActual);
-
-      const turnosDelDia = respuestaTurnos.datos.filter(
-        (turno) =>
-          claveFecha(new Date(turno.fechaHoraInicio)) ===
-          claveFecha(fechaSeleccionada),
-      );
-
-      const turnosDisponibles = turnosDelDia.filter(
-        (turno) => !esTurnoPasado(turno.fechaHoraInicio),
-      );
-
-      setTurnos(turnosDisponibles);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo cargar la disponibilidad.",
-      );
-      setTurnos([]);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    setFechaSeleccionada(fecha);
   }
 
-  useEffect(() => {
-    cargarDisponibilidad();
-  }, [espacioId, fechaSeleccionada]);
+  function reintentarCarga() {
+    setError(null);
+    setLoading(true);
+    setIntentoCarga((intento) => intento + 1);
+  }
 
   function seleccionarTurno(turno: Turno) {
     if (turno.estado !== "libre" || esTurnoPasado(turno.fechaHoraInicio)) {
@@ -234,7 +271,7 @@ export default function DisponibilidadEspacioScreen() {
       );
 
       setModalVisible(false);
-      router.replace("/(tabs)/reservas");
+      router.replace("/(jugador)/reservas");
     } catch (err) {
       setMensajeReserva(
         err instanceof Error
@@ -253,6 +290,14 @@ export default function DisponibilidadEspacioScreen() {
   const fechaResumen = turnoSeleccionado
     ? new Date(turnoSeleccionado.fechaHoraInicio)
     : null;
+
+  if (!espacioId) {
+    return (
+      <View style={styles.stateContainer}>
+        <Text style={styles.errorText}>No se recibió el espacio a consultar.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -276,18 +321,14 @@ export default function DisponibilidadEspacioScreen() {
               !puedeIrAlDiaAnterior && styles.disabledButton,
             ]}
             disabled={!puedeIrAlDiaAnterior}
-            onPress={() =>
-              setFechaSeleccionada(sumarDias(fechaSeleccionada, -1))
-            }
+            onPress={() => cambiarFecha(sumarDias(fechaSeleccionada, -1))}
           >
             <Text style={styles.navigationText}>[ &lt; Día anterior ]</Text>
           </Pressable>
 
           <Pressable
             style={styles.navigationButton}
-            onPress={() =>
-              setFechaSeleccionada(sumarDias(fechaSeleccionada, 1))
-            }
+            onPress={() => cambiarFecha(sumarDias(fechaSeleccionada, 1))}
           >
             <Text style={styles.navigationText}>[ Día siguiente &gt; ]</Text>
           </Pressable>
@@ -306,7 +347,7 @@ export default function DisponibilidadEspacioScreen() {
               <Pressable
                 key={claveFecha(fecha)}
                 style={[styles.dateButton, activa && styles.dateButtonActive]}
-                onPress={() => setFechaSeleccionada(fecha)}
+                onPress={() => cambiarFecha(fecha)}
               >
                 <Text
                   style={[styles.dateText, activa && styles.dateTextActive]}
@@ -338,11 +379,11 @@ export default function DisponibilidadEspacioScreen() {
           </View>
         ) : error ? (
           <View style={styles.stateContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{error.mensaje}</Text>
 
             <Pressable
               style={styles.secondaryButton}
-              onPress={cargarDisponibilidad}
+              onPress={reintentarCarga}
             >
               <Text style={styles.secondaryButtonText}>[ Reintentar ]</Text>
             </Pressable>

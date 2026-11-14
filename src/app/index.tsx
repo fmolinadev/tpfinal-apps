@@ -1,51 +1,60 @@
 import { useRouter } from "expo-router";
 import * as SplashScreenModule from "expo-splash-screen";
 import { useEffect } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { Alert } from "react-native";
+
+import {
+  restoreSession,
+} from "@/persistencia/session";
 
 export default function AppSplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const timeout = setTimeout(async () => {
-      await SplashScreenModule.hideAsync();
-      router.replace("/(auth)/login");
-    }, 1800);
+    let active = true;
 
-    return () => clearTimeout(timeout);
+    async function redirigirSegunSesion() {
+      let destino: "/(auth)/login" | "/(auth)/biometria" =
+        "/(auth)/login";
+      let errorRestauracion: unknown;
+      let restauracionFallida = false;
+
+      try {
+        const sesion = await restoreSession();
+        destino = sesion.hasSession
+          ? "/(auth)/biometria"
+          : "/(auth)/login";
+      } catch (error) {
+        errorRestauracion = error;
+        restauracionFallida = true;
+      }
+
+      if (!active) return;
+
+      try {
+        await SplashScreenModule.hideAsync();
+      } catch (error) {
+        console.warn("No se pudo ocultar el splash nativo.", error);
+      }
+
+      if (!active) return;
+      if (restauracionFallida) {
+        Alert.alert(
+          "No se pudo restaurar la sesión",
+          errorRestauracion instanceof Error
+            ? errorRestauracion.message
+            : "Volvé a iniciar sesión para continuar.",
+        );
+      }
+      router.replace(destino);
+    }
+
+    void redirigirSegunSesion();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.logoWrap}>
-        <Image
-          source={require("@/assets/images/logo_complejo_villaguay_blanco.png")}
-          style={styles.logo}
-          resizeMode="contain"
-          accessibilityLabel="Logo de Villaguay Deportes"
-        />
-      </View>
-    </View>
-  );
+  return null;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#a55890",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  logoWrap: {
-    flex: 1,
-    height: 90,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 12,
-  },
-  logo: {
-    width: 572,
-    height: 90,
-  },
-});

@@ -1,18 +1,17 @@
 {
   "expo": {
-    "name": "tpfinal-apps",
+    "name": "Villaguay Deportes",
     "slug": "tpfinal-apps",
+    "icon": "./assets/images/icon.png",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "tpfinalapps",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,7 +27,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/icono-splash.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -47,6 +46,12 @@
       "expo-video",
       "expo-sqlite",
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitir que la app adjunte fotos y videos a los reportes de inspección."
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {
