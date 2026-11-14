@@ -1,18 +1,51 @@
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
-import { clearAppSession, getCurrentUserSession } from "@/persistencia/session";
+import { clearAppSession, getCurrentUserSession, persistUserSession } from "@/persistencia/session";
+import { apiGet } from "@/servicios/api";
 import type { Usuario } from "@/tipos/usuario";
+
+type RespuestaUsuario = {
+  datos: Usuario;
+  meta: null;
+};
 
 export default function PerfilScreen() {
   const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
 
-  useEffect(() => {
-    getCurrentUserSession().then(setUsuario);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
+
+      async function cargarUsuario() {
+        try {
+          const guardado = await getCurrentUserSession();
+
+          if (activo && guardado) {
+            setUsuario(guardado);
+          }
+
+          const respuesta = await apiGet<RespuestaUsuario>("/yo");
+
+          if (!activo) return;
+
+          setUsuario(respuesta.datos);
+          await persistUserSession(respuesta.datos);
+        } catch {
+          // Si la API no está disponible, se conservan los datos guardados.
+        }
+      }
+
+      void cargarUsuario();
+
+      return () => {
+        activo = false;
+      };
+    }, []),
+  );
 
   async function cerrarSesion() {
     await clearAppSession();
@@ -22,20 +55,44 @@ export default function PerfilScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Perfil</Text>
+
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>
           {usuario?.nombre?.charAt(0).toUpperCase() ?? "J"}
         </Text>
       </View>
+
       <View style={styles.card}>
         <Text style={styles.name}>{usuario?.nombre ?? "Jugador"}</Text>
         <Text style={styles.role}>Jugador</Text>
+
         <View style={styles.divider} />
+
         <Text style={styles.label}>Email</Text>
         <Text style={styles.value}>{usuario?.email ?? "Sin email"}</Text>
+
         <Text style={styles.label}>Teléfono</Text>
         <Text style={styles.value}>{usuario?.telefono ?? "Sin teléfono"}</Text>
       </View>
+
+      <View style={styles.statsCard}>
+        <Text style={styles.statsTitle}>Actividad de la cuenta</Text>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {usuario?.cancelacionesTardias ?? 0}
+            </Text>
+            <Text style={styles.statLabel}>Cancelaciones tardías</Text>
+          </View>
+
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{usuario?.ausencias ?? 0}</Text>
+            <Text style={styles.statLabel}>Ausencias</Text>
+          </View>
+        </View>
+      </View>
+
       <Pressable style={styles.logout} onPress={() => void cerrarSesion()}>
         <Text style={styles.logoutText}>Cerrar sesión</Text>
       </Pressable>
@@ -44,88 +101,113 @@ export default function PerfilScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.light.backgroundElement },
-  content: { padding: 20, gap: 14 },
-  eyebrow: {
-    color: Colors.light.textSecondary,
-    fontFamily: Fonts.sans,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.4,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
   title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: Colors.light.text,
+    fontSize: 28,
     fontFamily: Fonts.sans,
+    fontWeight: "700",
+    color: Colors.light.text,
+    marginBottom: 24,
   },
   avatar: {
-    alignSelf: "center",
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: Colors.light.backgroundSelected,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 8,
+    alignSelf: "center",
+    marginBottom: 20,
   },
   avatarText: {
-    color: Colors.light.background,
-    fontSize: 36,
-    fontWeight: "800",
+    color: "#FFFFFF",
+    fontSize: 32,
     fontFamily: Fonts.sans,
+    fontWeight: "700",
   },
   card: {
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.light.backgroundElement,
     borderRadius: 16,
     padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.light.backgroundElement,
-    gap: 7,
+    marginBottom: 16,
   },
   name: {
-    color: Colors.light.text,
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 20,
     fontFamily: Fonts.sans,
+    fontWeight: "700",
+    color: Colors.light.text,
   },
   role: {
+    fontSize: 14,
     color: Colors.light.textSecondary,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    fontSize: 12,
-    letterSpacing: 1,
-    fontFamily: Fonts.sans,
+    marginTop: 4,
+    marginBottom: 16,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.light.backgroundElement,
-    marginVertical: 10,
+    backgroundColor: Colors.light.textSecondary,
+    marginBottom: 16,
   },
   label: {
+    fontSize: 13,
     color: Colors.light.textSecondary,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    fontFamily: Fonts.sans,
+    marginTop: 10,
   },
   value: {
+    fontSize: 15,
     color: Colors.light.text,
-    fontSize: 16,
-    marginBottom: 7,
+    marginTop: 3,
+  },
+  statsCard: {
+    backgroundColor: Colors.light.backgroundElement,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  statsTitle: {
+    fontSize: 17,
     fontFamily: Fonts.sans,
+    fontWeight: "700",
+    color: Colors.light.text,
+    marginBottom: 18,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statNumber: {
+    fontSize: 28,
+    fontFamily: Fonts.sans,
+    fontWeight: "700",
+    color: Colors.light.textSecondary,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    marginTop: 5,
   },
   logout: {
-    borderWidth: 1,
-    borderColor: Colors.light.textSecondary,
+    backgroundColor: Colors.light.backgroundSelected,
+    padding: 16,
     borderRadius: 12,
-    padding: 15,
     alignItems: "center",
-    marginTop: 4,
   },
   logoutText: {
-    color: Colors.light.textSecondary,
-    fontWeight: "800",
+    color: "#FFFFFF",
+    fontSize: 15,
     fontFamily: Fonts.sans,
+    fontWeight: "700",
   },
 });
