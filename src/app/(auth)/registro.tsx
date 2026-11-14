@@ -1,20 +1,22 @@
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { registrarUsuario } from "@/servicios/auth";
+import { registrarDispositivoPush } from "@/servicios/notificaciones";
 
 export default function RegistroScreen() {
   const router = useRouter();
+
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -24,13 +26,23 @@ export default function RegistroScreen() {
   async function handleRegistro() {
     try {
       setLoading(true);
+
       const { usuario } = await registrarUsuario({
         nombre,
         email,
         telefono,
         password,
       });
-      Alert.alert("Registro exitoso", "Tu cuenta fue creada correctamente.");
+
+      // Solo los jugadores necesitan recibir avisos por bloqueos.
+      if (usuario.rol === "jugador") {
+        void registrarDispositivoPush();
+      }
+
+      Alert.alert(
+        "Registro exitoso",
+        "Tu cuenta fue creada correctamente.",
+      );
 
       if (usuario.rol === "jugador") {
         router.replace("/(jugador)/inicio");
@@ -38,11 +50,16 @@ export default function RegistroScreen() {
       }
 
       router.replace(
-        usuario.rol === "administrador" ? "/(admin)/agenda" : "/(staff)/agenda",
+        usuario.rol === "administrador"
+          ? "/(admin)/agenda"
+          : "/(staff)/agenda",
       );
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "No se pudo crear la cuenta.";
+        error instanceof Error
+          ? error.message
+          : "No se pudo crear la cuenta.";
+
       Alert.alert("Error en el registro", message);
     } finally {
       setLoading(false);
@@ -78,6 +95,7 @@ export default function RegistroScreen() {
           placeholder="usuario@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
         />
 
         <Text style={styles.label}>Teléfono</Text>
@@ -99,7 +117,7 @@ export default function RegistroScreen() {
         />
 
         <Pressable
-          style={styles.button}
+          style={[styles.button, loading && styles.disabledButton]}
           onPress={handleRegistro}
           disabled={loading}
         >
@@ -175,6 +193,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   linkButton: {
     marginTop: 16,

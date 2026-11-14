@@ -14,11 +14,15 @@ import {
   getHomeRouteForUser,
 } from "@/persistencia/session";
 
+import { registrarDispositivoPush } from "@/servicios/notificaciones";
+
 export default function BiometricScreen() {
   const router = useRouter();
+
   const [status, setStatus] = useState(
     "Verificando la sesión y el dispositivo...",
   );
+
   const [procesando, setProcesando] = useState(true);
 
   useEffect(() => {
@@ -41,14 +45,23 @@ export default function BiometricScreen() {
 
         const autenticado = await finishBiometricLogin();
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         if (!autenticado) {
           setStatus(
             "No se pudo completar la autenticación. Podés ingresar nuevamente con tu email y contraseña.",
           );
+
           setProcesando(false);
           return;
+        }
+
+        // Solo los jugadores necesitan recibir avisos por bloqueos.
+        // La autenticación no depende del registro push.
+        if (usuario.rol === "jugador") {
+          void registrarDispositivoPush();
         }
 
         router.replace(getHomeRouteForUser(usuario) as never);
@@ -59,6 +72,7 @@ export default function BiometricScreen() {
           setStatus(
             "No se pudo verificar tu identidad. Iniciá sesión nuevamente.",
           );
+
           setProcesando(false);
         }
       }

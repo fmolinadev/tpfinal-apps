@@ -1,19 +1,21 @@
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { loginUsuario } from "@/servicios/auth";
+import { registrarDispositivoPush } from "@/servicios/notificaciones";
 
 export default function LoginScreen() {
   const router = useRouter();
+
   const [email, setEmail] = useState("demo@tpfinal.com");
   const [password, setPassword] = useState("123456");
   const [loading, setLoading] = useState(false);
@@ -21,9 +23,20 @@ export default function LoginScreen() {
   async function handleLogin() {
     try {
       setLoading(true);
-      const { token, usuario } = await loginUsuario({ email, password });
+
+      const { token, usuario } = await loginUsuario({
+        email,
+        password,
+      });
+
       if (!token) {
         throw new Error("No se generó una sesión válida.");
+      }
+
+      // Solo los jugadores necesitan recibir avisos por bloqueos.
+      // El registro push se realiza en segundo plano.
+      if (usuario.rol === "jugador") {
+        void registrarDispositivoPush();
       }
 
       if (usuario.rol === "jugador") {
@@ -32,11 +45,16 @@ export default function LoginScreen() {
       }
 
       router.replace(
-        usuario.rol === "administrador" ? "/(admin)/agenda" : "/(staff)/agenda",
+        usuario.rol === "administrador"
+          ? "/(admin)/agenda"
+          : "/(staff)/agenda",
       );
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Ocurrió un error inesperado.";
+        error instanceof Error
+          ? error.message
+          : "Ocurrió un error inesperado.";
+
       Alert.alert("Error de acceso", message);
     } finally {
       setLoading(false);
@@ -55,7 +73,9 @@ export default function LoginScreen() {
 
       <View style={styles.card}>
         <Text style={styles.title}>Iniciar sesión</Text>
+
         <Text style={styles.label}>Email</Text>
+
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
@@ -67,6 +87,7 @@ export default function LoginScreen() {
         />
 
         <Text style={styles.label}>Contraseña</Text>
+
         <TextInput
           value={password}
           onChangeText={setPassword}
@@ -76,7 +97,7 @@ export default function LoginScreen() {
         />
 
         <Pressable
-          style={styles.button}
+          style={[styles.button, loading && styles.disabledButton]}
           onPress={handleLogin}
           disabled={loading}
         >
@@ -153,6 +174,9 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   linkButton: {
     marginTop: 16,
