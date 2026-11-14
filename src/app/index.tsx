@@ -3,16 +3,48 @@ import * as SplashScreenModule from "expo-splash-screen";
 import { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
+import {
+  clearAppSession,
+  restoreSession,
+} from "@/persistencia/session";
+
 export default function AppSplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const timeout = setTimeout(async () => {
-      await SplashScreenModule.hideAsync();
-      router.replace("/(auth)/login");
-    }, 1800);
+    let mounted = true;
 
-    return () => clearTimeout(timeout);
+    async function iniciarAplicacion() {
+      let destino = "/(tabs)";
+
+      try {
+        const sesion = await restoreSession();
+
+        if (sesion.hasSession) {
+          destino = "/(auth)/biometria";
+        }
+      } catch (error) {
+        console.error("Error al recuperar la sesión:", error);
+
+        try {
+          await clearAppSession();
+        } catch (clearError) {
+          console.error("Error al limpiar la sesión:", clearError);
+        }
+      }
+
+      if (!mounted) return;
+
+      router.replace(destino);
+
+      await SplashScreenModule.hideAsync().catch(() => undefined);
+    }
+
+    void iniciarAplicacion();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   return (

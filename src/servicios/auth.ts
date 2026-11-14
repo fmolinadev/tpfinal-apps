@@ -124,15 +124,15 @@ export async function isBiometricSupported(): Promise<boolean> {
 export async function authenticateWithBiometrics(
   options: { disableDeviceFallback?: boolean } = {},
 ): Promise<boolean> {
-  const supported = await isBiometricSupported();
+  try {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage: "Desbloqueá tu sesión para continuar",
+      fallbackLabel: "Usar código del dispositivo",
+      disableDeviceFallback: options.disableDeviceFallback ?? false,
+    });
 
-  if (!supported) return false;
-
-  const result = await LocalAuthentication.authenticateAsync({
-    promptMessage: "Autenticación biométrica requerida",
-    fallbackLabel: "Usar contraseña",
-    disableDeviceFallback: options.disableDeviceFallback ?? false,
-  });
-
-  return result.success;
+    return result.success;
+  } catch {
+    return false;
+  }
 }
