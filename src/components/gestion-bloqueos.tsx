@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { DateSelector, HourSelector } from "@/components/administrative-pickers";
+import { SpaceSelect } from "@/components/space-select";
 import { Fonts } from "@/constants/theme";
 import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import {
@@ -25,6 +26,11 @@ import { listarEstadosReservasPorFecha } from "@/servicios/reservas";
 import { obtenerAgenda } from "@/servicios/turnos";
 import type { Espacio } from "@/tipos";
 import type { TurnoAgenda } from "@/tipos/turno";
+import {
+  complejosDelCatalogo,
+  etiquetaComplejo,
+  normalizarComplejo,
+} from "@/utilidades/filtros-espacios";
 
 function fechaLocal(fecha: Date): string {
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
@@ -79,6 +85,7 @@ export function GestionBloqueos() {
   const palette = useTheme();
   const styles = useThemeStyles(createStyles, palette);
   const [espacios, setEspacios] = useState<Espacio[]>([]);
+  const [complejo, setComplejo] = useState("");
   const [espacioIds, setEspacioIds] = useState<string[]>([]);
   const [fecha, setFecha] = useState(() => fechaLocal(new Date()));
   const [inicio, setInicio] = useState("09:00");
@@ -97,6 +104,18 @@ export function GestionBloqueos() {
   const nombresPorId = useMemo(
     () => new Map(espacios.map((espacio) => [espacio.id, espacio.nombre])),
     [espacios],
+  );
+  const complejos = useMemo(
+    () => complejosDelCatalogo(espacios).map((nombre) => ({
+      id: nombre,
+      nombre: etiquetaComplejo(nombre),
+    })),
+    [espacios],
+  );
+  const espaciosDelComplejo = useMemo(
+    () => espacios.filter((espacio) => complejo !== "" &&
+      normalizarComplejo(espacio.complejo) === complejo),
+    [espacios, complejo],
   );
 
   const cargarBloqueos = useCallback(async () => {
@@ -173,12 +192,14 @@ export function GestionBloqueos() {
 
   function alternarTodosLosEspacios() {
     setEspacioIds((actuales) =>
-      actuales.length === espacios.length ? [] : espacios.map(({ id }) => id),
+      actuales.length === espaciosDelComplejo.length
+        ? []
+        : espaciosDelComplejo.map(({ id }) => id),
     );
   }
 
   function alternarEspaciosDescubiertos() {
-    const descubiertos = espacios
+    const descubiertos = espaciosDelComplejo
       .filter((espacio) => espacio.techado === false)
       .map(({ id }) => id);
     if (descubiertos.length === 0) {
@@ -347,70 +368,70 @@ export function GestionBloqueos() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Nuevo bloqueo</Text>
+        <Text style={styles.label}>Complejo</Text>
+        <SpaceSelect
+          spaces={complejos}
+          selectedId={complejo}
+          onSelect={(seleccion) => {
+            if (seleccion !== complejo) {
+              setComplejo(seleccion);
+              setEspacioIds([]);
+            }
+          }}
+          disabled={cargandoEspacios || complejos.length === 0}
+          placeholder={cargandoEspacios ? "Cargando complejos..." : "Seleccioná un complejo"}
+        />
         <Text style={styles.label}>Espacios</Text>
         <Pressable
           accessibilityRole="checkbox"
           accessibilityState={{
             checked:
-              espacios.length > 0 && espacioIds.length === espacios.length,
+              espaciosDelComplejo.length > 0 && espacioIds.length === espaciosDelComplejo.length,
           }}
-          disabled={cargandoEspacios || espacios.length === 0}
+          disabled={espaciosDelComplejo.length === 0}
           onPress={alternarTodosLosEspacios}
           style={[
             styles.selectAll,
-            espacioIds.length === espacios.length &&
-              espacios.length > 0 &&
+            espacioIds.length === espaciosDelComplejo.length &&
+              espaciosDelComplejo.length > 0 &&
               styles.optionSelected,
           ]}
         >
           <Text
             style={[
               styles.optionText,
-              espacioIds.length === espacios.length &&
-                espacios.length > 0 &&
+              espacioIds.length === espaciosDelComplejo.length &&
+                espaciosDelComplejo.length > 0 &&
                 styles.optionTextSelected,
             ]}
           >
-            {espacioIds.length === espacios.length && espacios.length > 0
+            {espacioIds.length === espaciosDelComplejo.length && espaciosDelComplejo.length > 0
               ? "✓ Todos los espacios"
               : "Seleccionar todos los espacios"}
           </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          disabled={cargandoEspacios || espacios.length === 0}
+          disabled={espaciosDelComplejo.length === 0}
           onPress={alternarEspaciosDescubiertos}
           style={styles.selectAll}
         >
           <Text style={styles.optionText}>Seleccionar espacios descubiertos</Text>
         </Pressable>
-        <View style={styles.spaces}>
-          {espacios.map((espacio) => {
-            const seleccionado = espacioIds.includes(espacio.id);
-            return (
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: seleccionado }}
-                key={espacio.id}
-                onPress={() => cambiarEspacio(espacio.id)}
-                style={[
-                  styles.space,
-                  seleccionado && styles.optionSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.optionText,
-                    seleccionado && styles.optionTextSelected,
-                  ]}
-                >
-                  {seleccionado ? "✓ " : ""}
-                  {espacio.nombre}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <SpaceSelect
+          multiple
+          spaces={espaciosDelComplejo}
+          selectedIds={espacioIds}
+          onSelect={cambiarEspacio}
+          disabled={espaciosDelComplejo.length === 0}
+          placeholder={cargandoEspacios
+            ? "Cargando espacios..."
+            : !complejo
+              ? "Seleccioná primero un complejo"
+              : espaciosDelComplejo.length === 0
+                ? "No hay espacios disponibles"
+              : "Seleccioná uno o más espacios"}
+        />
         {cargandoEspacios ? (
           <ActivityIndicator color={palette.backgroundSelected} />
         ) : null}
@@ -594,19 +615,6 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       borderColor: palette.backgroundSelected,
       borderRadius: 10,
       padding: 12,
-      backgroundColor: palette.background,
-    },
-    spaces: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    space: {
-      borderWidth: 1,
-      borderColor: palette.backgroundSelected,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
       backgroundColor: palette.background,
     },
     option: {

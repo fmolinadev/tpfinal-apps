@@ -6,7 +6,7 @@ import { RoleTabIcon } from "@/components/ui/role-tab-icon";
 export default function JugadorLayout() {
   return (
     <AuthGuard allowedRoles={["jugador"]}>
-      <Tabs backBehavior="fullHistory" screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="fullHistory" safeAreaInsets={{ bottom: 0 }} screenOptions={{ headerShown: false }}>
         <Tabs.Screen
           name="inicio"
           options={{
@@ -16,8 +16,8 @@ export default function JugadorLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="espacios" options={{ title: "Espacios", href: null }} />
-        <Tabs.Screen name="mapa" options={{ title: "Mapa", href: null }} />
+        <Tabs.Screen name="espacios" options={{ title: "Espacios", tabBarItemStyle: { display: "none" } }} />
+        <Tabs.Screen name="mapa" options={{ title: "Mapa", tabBarItemStyle: { display: "none" } }} />
         <Tabs.Screen
           name="escanear"
           options={{
@@ -32,26 +32,26 @@ export default function JugadorLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="reservas" options={{ title: "Reservas", href: null }} />
-        <Tabs.Screen name="perfil" options={{ title: "Perfil", href: null }} />
+        <Tabs.Screen name="reservas" options={{ title: "Reservas", tabBarItemStyle: { display: "none" } }} />
+        <Tabs.Screen name="perfil" options={{ title: "Perfil", tabBarItemStyle: { display: "none" } }} />
         <Tabs.Screen
           name="disponibilidad/index"
           options={{
-            href: null,
+            tabBarItemStyle: { display: "none" },
           }}
         />
         <Tabs.Screen
           name="disponibilidad/[id]"
           options={{
             title: "Disponibilidad",
-            href: null,
+            tabBarItemStyle: { display: "none" },
           }}
         />
         <Tabs.Screen
           name="espacio/[id]"
           options={{
             title: "Espacio",
-            href: null,
+            tabBarItemStyle: { display: "none" },
             tabBarStyle: { display: "none" },
           }}
         />
@@ -59,7 +59,7 @@ export default function JugadorLayout() {
           name="espacio/[id]/disponibilidad"
           options={{
             title: "Disponibilidad",
-            href: null,
+            tabBarItemStyle: { display: "none" },
             tabBarStyle: { display: "none" },
           }}
         />
@@ -67,7 +67,7 @@ export default function JugadorLayout() {
           name="reserva/[id]"
           options={{
             title: "Reserva",
-            href: null,
+            tabBarItemStyle: { display: "none" },
             tabBarStyle: { display: "none" },
           }}
         />

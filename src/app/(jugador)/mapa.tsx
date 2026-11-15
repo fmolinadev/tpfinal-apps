@@ -362,7 +362,7 @@ export default function MapaScreen() {
                         setGrupoSeleccionado(null);
                         abrirEspacio(espacio);
                       }}>
-                        <Text style={styles.calloutAction}>Ver ficha: {espacio.nombre}</Text>
+                        <Text style={styles.calloutAction}>{espacio.nombre}</Text>
                       </Pressable>
                       <Pressable accessibilityRole="button" style={styles.calloutDirection} onPress={() => mostrarIndicaciones(espacio)}>
                         <Text style={styles.calloutText}>Cómo llegar</Text>

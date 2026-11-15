@@ -4,14 +4,14 @@ import { AuthGuard } from "@/components/auth-guard";
 import { RoleTabIcon } from "@/components/ui/role-tab-icon";
 
 const STAFF_SCREENS = [
-  { name: "agenda", label: "Agenda" },
-  { name: "presente-ausente", label: "Asistencia" },
-];
+  { name: "agenda", label: "Agenda", icon: "calendar" },
+  { name: "presente-ausente", label: "Asistencia", icon: "attendance" },
+] as const;
 
 export default function StaffLayout() {
   return (
     <AuthGuard allowedRoles={["encargado", "administrador"]}>
-      <Tabs backBehavior="fullHistory" screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="fullHistory" safeAreaInsets={{ bottom: 0 }} screenOptions={{ headerShown: false }}>
         <Tabs.Screen
           name="inicio"
           options={{
@@ -25,13 +25,18 @@ export default function StaffLayout() {
           <Tabs.Screen
             key={screen.name}
             name={screen.name}
-            options={{ title: screen.label }}
+            options={{
+              title: screen.label,
+              tabBarIcon: ({ color, size, focused }) => (
+                <RoleTabIcon name={screen.icon} color={color} size={size} focused={focused} />
+              ),
+            }}
           />
         ))}
-        <Tabs.Screen name="perfil" options={{ href: null }} />
-        <Tabs.Screen name="mantenimiento" options={{ href: null }} />
-        <Tabs.Screen name="bloqueos" options={{ href: null }} />
-        <Tabs.Screen name="escanear" options={{ href: null }} />
+        <Tabs.Screen name="perfil" options={{ tabBarItemStyle: { display: "none" } }} />
+        <Tabs.Screen name="mantenimiento" options={{ tabBarItemStyle: { display: "none" } }} />
+        <Tabs.Screen name="bloqueos" options={{ tabBarItemStyle: { display: "none" } }} />
+        <Tabs.Screen name="escanear" options={{ tabBarItemStyle: { display: "none" } }} />
       </Tabs>
     </AuthGuard>
   );

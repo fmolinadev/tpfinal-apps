@@ -243,8 +243,8 @@ function RootStack() {
   const palette = useTheme();
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: palette.backgroundElement }}
-      edges={["top"]}
+      style={{ flex: 1, backgroundColor: palette.backgroundElement, paddingBottom: 8 }}
+      edges={["top", "bottom"]}
     >
       <StatusBar style={palette === Colors.dark ? "light" : "dark"} />
       <NetworkStatusBanner />

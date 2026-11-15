@@ -3,7 +3,7 @@ import type { RolUsuario } from "@/tipos/usuario";
 export type RutaInicio =
   | "/(jugador)/inicio"
   | "/(staff)/agenda"
-  | "/(admin)/agenda"
+  | "/(admin)/inicio"
   | "/(auth)/login";
 
 export function rutaInicioPorRol(rol: RolUsuario | undefined): RutaInicio {
@@ -13,7 +13,7 @@ export function rutaInicioPorRol(rol: RolUsuario | undefined): RutaInicio {
     case "encargado":
       return "/(staff)/agenda";
     case "administrador":
-      return "/(admin)/agenda";
+      return "/(admin)/inicio";
     default:
       return "/(auth)/login";
   }

@@ -107,14 +107,14 @@ function formatearPrecio(precio: number): string {
 function textoEstado(turno: Turno): string {
   switch (turno.estado) {
     case "libre":
-      return `✓ Libre - ${formatearPrecio(turno.precio)}`;
+      return `Libre · ${formatearPrecio(turno.precio)}`;
     case "ocupado":
     case "reservado":
-      return "● Reservado";
+      return "Reservado";
     case "mantenimiento":
-      return `⚠ Mantenimiento${turno.motivoBloqueo ? `: ${turno.motivoBloqueo}` : ""}`;
+      return `Mantenimiento${turno.motivoBloqueo ? `: ${turno.motivoBloqueo}` : ""}`;
     case "fijo":
-      return "★ Fijo";
+      return "Fijo";
   }
 }
 
@@ -534,8 +534,12 @@ export default function DisponibilidadEspacioScreen() {
           />
         }
       >
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>[ &lt; Atrás ]</Text>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.backButtonText}>← Volver</Text>
         </Pressable>
 
         <Text style={styles.title}>Disponibilidad</Text>
@@ -550,6 +554,8 @@ export default function DisponibilidadEspacioScreen() {
 
         <View style={styles.navigationRow}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !puedeIrAlDiaAnterior }}
             style={[
               styles.navigationButton,
               !puedeIrAlDiaAnterior && styles.disabledButton,
@@ -557,10 +563,12 @@ export default function DisponibilidadEspacioScreen() {
             disabled={!puedeIrAlDiaAnterior}
             onPress={() => cambiarFecha(sumarDias(fechaSeleccionada, -1))}
           >
-            <Text style={styles.navigationText}>[ &lt; Día anterior ]</Text>
+            <Text style={styles.navigationText}>Día anterior</Text>
           </Pressable>
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !puedeIrAlDiaSiguiente }}
             style={[
               styles.navigationButton,
               !puedeIrAlDiaSiguiente && styles.disabledButton,
@@ -568,7 +576,7 @@ export default function DisponibilidadEspacioScreen() {
             disabled={!puedeIrAlDiaSiguiente}
             onPress={() => cambiarFecha(sumarDias(fechaSeleccionada, 1))}
           >
-            <Text style={styles.navigationText}>[ Día siguiente &gt; ]</Text>
+            <Text style={styles.navigationText}>Día siguiente</Text>
           </Pressable>
         </View>
 
@@ -584,6 +592,8 @@ export default function DisponibilidadEspacioScreen() {
             return (
               <Pressable
                 key={claveFecha(fecha)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activa }}
                 style={[styles.dateButton, activa && styles.dateButtonActive]}
                 onPress={() => cambiarFecha(fecha)}
               >
@@ -620,10 +630,11 @@ export default function DisponibilidadEspacioScreen() {
             <Text style={styles.errorText}>{error.mensaje}</Text>
 
             <Pressable
+              accessibilityRole="button"
               style={styles.secondaryButton}
               onPress={reintentarCarga}
             >
-              <Text style={styles.secondaryButtonText}>[ Reintentar ]</Text>
+              <Text style={styles.secondaryButtonText}>Reintentar</Text>
             </Pressable>
           </View>
         ) : turnos.length === 0 ? (
@@ -656,6 +667,7 @@ export default function DisponibilidadEspacioScreen() {
                     key={turno.id}
                     disabled={deshabilitado}
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: deshabilitado }}
                     accessibilityLabel={`${formatearHora(turno.fechaHoraInicio)}. ${textoEstado(turno)}`}
                     onPress={() => void seleccionarTurno(turno)}
                     style={[
@@ -758,6 +770,7 @@ export default function DisponibilidadEspacioScreen() {
             )}
 
             <Pressable
+              accessibilityRole="button"
               style={[
                 styles.confirmButton,
                 reservando && styles.disabledButton,
@@ -766,16 +779,17 @@ export default function DisponibilidadEspacioScreen() {
               onPress={confirmarReserva}
             >
               <Text style={styles.confirmButtonText}>
-                {reservando ? "Cargando..." : "[ CONFIRMAR RESERVA ]"}
+                {reservando ? "Cargando..." : "Confirmar reserva"}
               </Text>
             </Pressable>
 
             <Pressable
+              accessibilityRole="button"
               style={styles.cancelButton}
               disabled={reservando}
               onPress={() => setModalVisible(false)}
             >
-              <Text style={styles.cancelButtonText}>[ Cancelar ]</Text>
+              <Text style={styles.cancelButtonText}>Cancelar</Text>
             </Pressable>
           </View>
         </View>
@@ -790,12 +804,10 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
     content: { padding: 20, paddingBottom: 36 },
     backButton: {
       alignSelf: "flex-start",
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderWidth: 1,
-      borderColor: palette.backgroundSelected,
-      backgroundColor: palette.background,
-      marginBottom: 18,
+      minHeight: 44,
+      justifyContent: "center",
+      paddingRight: 12,
+      marginBottom: 10,
     },
     backButtonText: {
       color: palette.textSecondary,
@@ -831,6 +843,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       alignItems: "center",
       borderWidth: 1,
       borderColor: palette.backgroundSelected,
+      borderRadius: 12,
       backgroundColor: palette.background,
       paddingHorizontal: 8,
     },
@@ -839,6 +852,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       fontSize: 14,
       fontWeight: "800",
       textAlign: "center",
+      fontFamily: Fonts.sans,
     },
     disabledButton: { opacity: 0.45 },
     dateRow: { gap: 8, paddingBottom: 14 },
@@ -850,6 +864,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       justifyContent: "center",
       borderWidth: 1,
       borderColor: palette.backgroundElement,
+      borderRadius: 10,
       backgroundColor: palette.background,
     },
     dateButtonActive: {
@@ -881,11 +896,12 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       minHeight: 74,
       padding: 14,
       justifyContent: "center",
-      borderWidth: 2,
+      borderWidth: 1,
+      borderRadius: 14,
     },
     turno_libre: {
       backgroundColor: palette.background,
-      borderColor: palette.textSecondary,
+      borderColor: palette.backgroundElement,
     },
     turno_ocupado: {
       backgroundColor: palette.backgroundElement,
@@ -904,6 +920,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       fontSize: 21,
       fontWeight: "900",
       marginBottom: 5,
+      fontFamily: Fonts.sans,
     },
     turnoEstado: {
       color: palette.text,
@@ -930,6 +947,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       backgroundColor: palette.background,
       borderColor: palette.backgroundSelected,
       borderWidth: 1,
+      borderRadius: 12,
       padding: 12,
       marginBottom: 12,
       fontWeight: "800",
@@ -938,6 +956,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
     noFreeSlots: {
       color: palette.text,
       backgroundColor: palette.background,
+      borderRadius: 12,
       padding: 12,
       marginBottom: 12,
       fontWeight: "700",
@@ -947,6 +966,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       padding: 14,
       borderWidth: 1,
       borderColor: palette.backgroundSelected,
+      borderRadius: 10,
       backgroundColor: palette.background,
     },
     secondaryButtonText: {
@@ -961,22 +981,25 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       backgroundColor: "rgba(59, 55, 58, 0.55)",
     },
     modalCard: {
-      backgroundColor: palette.background,
-      borderWidth: 2,
+      backgroundColor: palette.backgroundElement,
+      borderWidth: 1,
       borderColor: palette.backgroundSelected,
-      padding: 20,
+      borderRadius: 18,
+      padding: 22,
     },
     modalTitle: {
       color: palette.text,
       fontSize: 25,
       fontWeight: "900",
       marginBottom: 16,
+      fontFamily: Fonts.sans,
     },
     modalQuestion: {
       color: palette.text,
       fontSize: 17,
       fontWeight: "800",
       marginBottom: 8,
+      fontFamily: Fonts.sans,
     },
     input: {
       color: palette.text,
@@ -984,14 +1007,16 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       fontWeight: "900",
       borderWidth: 1,
       borderColor: palette.backgroundSelected,
+      borderRadius: 10,
       backgroundColor: palette.background,
       padding: 12,
       marginBottom: 16,
+      fontFamily: Fonts.sans,
     },
     summary: {
-      borderTopWidth: 1,
-      borderTopColor: palette.backgroundElement,
-      paddingTop: 14,
+      borderRadius: 12,
+      backgroundColor: palette.background,
+      padding: 14,
       marginBottom: 16,
     },
     summaryTitle: {
@@ -999,6 +1024,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       fontSize: 18,
       fontWeight: "900",
       marginBottom: 8,
+      fontFamily: Fonts.sans,
     },
     summaryText: {
       color: palette.text,
@@ -1011,6 +1037,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       justifyContent: "center",
       alignItems: "center",
       backgroundColor: palette.backgroundSelected,
+      borderRadius: 10,
       padding: 14,
     },
     confirmButtonText: {
@@ -1018,6 +1045,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       fontSize: 16,
       fontWeight: "900",
       textAlign: "center",
+      fontFamily: Fonts.sans,
     },
     cancelButton: { alignItems: "center", padding: 15, marginTop: 5 },
     cancelButtonText: {

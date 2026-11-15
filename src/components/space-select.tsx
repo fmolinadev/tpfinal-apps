@@ -13,34 +13,36 @@ import type { Espacio } from "@/tipos";
 
 type SpaceSelectProps = {
   spaces: Pick<Espacio, "id" | "nombre">[];
-  selectedId: string;
   onSelect: (id: string) => void;
   disabled?: boolean;
   placeholder?: string;
-};
+} & (
+  | { multiple?: false; selectedId: string }
+  | { multiple: true; selectedIds: string[] }
+);
 
-export function SpaceSelect({
-  spaces,
-  selectedId,
-  onSelect,
-  disabled = false,
-  placeholder = "Seleccioná un espacio",
-}: SpaceSelectProps) {
+export function SpaceSelect(props: SpaceSelectProps) {
+  const { spaces, onSelect, disabled = false, placeholder = "Seleccioná un espacio" } = props;
   const palette = useTheme();
   const styles = useThemeStyles(createStyles, palette);
   const [visible, setVisible] = useState(false);
-  const selectedSpace = spaces.find((space) => space.id === selectedId);
+  const selectedSpaces = spaces.filter((space) =>
+    props.multiple ? props.selectedIds.includes(space.id) : space.id === props.selectedId,
+  );
+  const selectionLabel = selectedSpaces.length > 1
+    ? `${selectedSpaces.length} espacios seleccionados`
+    : selectedSpaces[0]?.nombre ?? placeholder;
 
   function elegirEspacio(id: string) {
     onSelect(id);
-    setVisible(false);
+    if (!props.multiple) setVisible(false);
   }
 
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={selectedSpace?.nombre ?? placeholder}
+        accessibilityLabel={selectionLabel}
         accessibilityState={{ disabled, expanded: visible }}
         disabled={disabled}
         onPress={() => setVisible(true)}
@@ -49,10 +51,10 @@ export function SpaceSelect({
         <Text
           style={[
             styles.selectText,
-            !selectedSpace && styles.placeholder,
+            selectedSpaces.length === 0 && styles.placeholder,
           ]}
         >
-          {selectedSpace?.nombre ?? placeholder}
+          {selectionLabel}
         </Text>
         <Text style={styles.chevron}>▼</Text>
       </Pressable>
@@ -78,28 +80,42 @@ export function SpaceSelect({
               style={styles.options}
               keyboardShouldPersistTaps="handled"
             >
-              {spaces.map((space) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: space.id === selectedId }}
-                  key={space.id}
-                  onPress={() => elegirEspacio(space.id)}
-                  style={[
-                    styles.option,
-                    space.id === selectedId && styles.optionSelected,
-                  ]}
-                >
-                  <Text
+              {spaces.map((space) => {
+                const selected = props.multiple
+                  ? props.selectedIds.includes(space.id)
+                  : space.id === props.selectedId;
+                return (
+                  <Pressable
+                    accessibilityRole={props.multiple ? "checkbox" : "button"}
+                    accessibilityState={props.multiple ? { checked: selected } : { selected }}
+                    key={space.id}
+                    onPress={() => elegirEspacio(space.id)}
                     style={[
-                      styles.optionText,
-                      space.id === selectedId && styles.optionTextSelected,
+                      styles.option,
+                      selected && styles.optionSelected,
                     ]}
                   >
-                    {space.nombre}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selected && styles.optionTextSelected,
+                      ]}
+                    >
+                      {space.nombre}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
+            {props.multiple ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setVisible(false)}
+                style={styles.done}
+              >
+                <Text style={styles.doneText}>Listo</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
@@ -179,6 +195,17 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
     optionTextSelected: {
       color: palette.textOnSelected,
       fontWeight: "800",
+    },
+    done: {
+      alignItems: "center",
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: palette.backgroundSelected,
+    },
+    doneText: {
+      color: palette.textOnSelected,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
     },
   });
 }

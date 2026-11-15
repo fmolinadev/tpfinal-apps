@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
@@ -5,12 +6,14 @@ import {
     ActivityIndicator,
     Alert,
     Image,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     View,
 } from "react-native";
+import { WebView } from "react-native-webview";
 
 import { MapaLeaflet } from "@/components/mapa-leaflet";
 import { Fonts } from "@/constants/theme";
@@ -24,6 +27,7 @@ import {
   abrirIndicaciones,
   tieneCoordenadasValidas,
 } from "@/utilidades/mapas";
+import { idVideoYoutube } from "@/utilidades/video-youtube";
 
 export default function EspacioDetalleScreen() {
   const palette = useTheme();
@@ -40,7 +44,12 @@ export default function EspacioDetalleScreen() {
   const [espaciosFavoritos, setEspaciosFavoritos] = useState<string[]>([]);
   const [actualizandoFavorito, setActualizandoFavorito] = useState(false);
   const videoUrl = espacio?.videoUrl ?? null;
-  const player = useVideoPlayer(videoUrl ? { uri: videoUrl } : null);
+  const youtubeId = idVideoYoutube(videoUrl);
+  const [videoFallido, setVideoFallido] = useState<string | null>(null);
+  const appId = Platform.OS === "ios"
+    ? Constants.expoConfig?.ios?.bundleIdentifier
+    : Constants.expoConfig?.android?.package;
+  const player = useVideoPlayer(videoUrl && !youtubeId ? { uri: videoUrl } : null);
 
   function mostrarIndicaciones(ubicacion: Espacio) {
     void abrirIndicaciones(ubicacion).catch((err: unknown) => {
@@ -144,8 +153,8 @@ export default function EspacioDetalleScreen() {
       <View style={styles.loader}>
         <Text style={styles.title}>Espacio no disponible</Text>
         <Text style={styles.errorText}>{error ?? "Sin información."}</Text>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>[ Volver ]</Text>
+        <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>← Volver</Text>
         </Pressable>
       </View>
     );
@@ -158,8 +167,8 @@ export default function EspacioDetalleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backButtonText}>[ Volver ]</Text>
+      <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => router.back()}>
+        <Text style={styles.backButtonText}>← Volver</Text>
       </Pressable>
 
       <Text style={styles.title}>{espacio.nombre}</Text>
@@ -231,7 +240,34 @@ export default function EspacioDetalleScreen() {
 
       <View style={styles.sectionBox}>
         <Text style={styles.sectionTitle}>Video</Text>
-        {videoUrl ? (
+        {youtubeId ? (
+          appId && videoFallido !== youtubeId ? (
+            <WebView
+              key={youtubeId}
+              source={{
+                uri: `https://www.youtube.com/embed/${youtubeId}?playsinline=1`,
+                headers: { Referer: `https://${appId}` },
+              }}
+              style={styles.video}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction
+              onError={() => setVideoFallido(youtubeId)}
+              onHttpError={() => setVideoFallido(youtubeId)}
+              onRenderProcessGone={() => setVideoFallido(youtubeId)}
+              onContentProcessDidTerminate={() => setVideoFallido(youtubeId)}
+              accessibilityLabel="Video de YouTube del espacio"
+            />
+          ) : (
+            <View>
+              <Text style={styles.text}>No se pudo cargar el video de YouTube.</Text>
+              {appId ? (
+                <Pressable accessibilityRole="button" style={styles.videoButton} onPress={() => setVideoFallido(null)}>
+                  <Text style={styles.videoButtonText}>Reintentar</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )
+        ) : videoUrl ? (
           <View>
             <VideoView
               player={player}
@@ -267,6 +303,7 @@ export default function EspacioDetalleScreen() {
               Coordenadas: {espacio.latitud}, {espacio.longitud}
             </Text>
             <Pressable
+              accessibilityRole="button"
               style={styles.directionsButton}
               onPress={() => mostrarIndicaciones(espacio)}
             >
@@ -279,6 +316,7 @@ export default function EspacioDetalleScreen() {
       </View>
 
       <Pressable
+        accessibilityRole="button"
         style={styles.primaryButton}
         onPress={() =>
           router.push(
@@ -296,8 +334,8 @@ export default function EspacioDetalleScreen() {
       >
         <Text style={styles.primaryButtonText}>
           {esConsultaPublica
-            ? "[ VER DISPONIBILIDAD ]"
-            : "[ VER DISPONIBILIDAD Y RESERVAR ]"}
+            ? "Ver disponibilidad"
+            : "Ver disponibilidad y reservar"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -326,17 +364,15 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
     },
     backButton: {
       alignSelf: "flex-start",
-      backgroundColor: palette.background,
-      borderRadius: 10,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderWidth: 1,
-      borderColor: palette.backgroundSelected,
-      marginBottom: 18,
+      minHeight: 44,
+      justifyContent: "center",
+      paddingRight: 12,
+      marginBottom: 10,
     },
     backButtonText: {
       color: palette.textSecondary,
       fontWeight: "800",
+      fontFamily: Fonts.sans,
     },
     title: {
       fontSize: 30,
@@ -362,7 +398,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       alignSelf: "flex-start",
       backgroundColor: palette.background,
       borderColor: palette.backgroundSelected,
-      borderRadius: 10,
+      borderRadius: 12,
       borderWidth: 1,
       marginTop: 8,
       marginBottom: 12,
@@ -426,6 +462,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       paddingHorizontal: 14,
       borderWidth: 1,
       borderColor: palette.backgroundSelected,
+      borderRadius: 12,
       backgroundColor: palette.background,
     },
     videoButtonText: {
@@ -449,7 +486,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       marginTop: 12,
       paddingVertical: 11,
       paddingHorizontal: 16,
-      borderRadius: 10,
+      borderRadius: 12,
       backgroundColor: palette.backgroundSelected,
     },
     directionsButtonText: {
@@ -459,13 +496,15 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
     },
     primaryButton: {
       marginTop: 8,
-      backgroundColor: palette.background,
-      borderRadius: 12,
+      backgroundColor: palette.backgroundSelected,
+      borderRadius: 16,
       paddingVertical: 16,
+      paddingHorizontal: 16,
       alignItems: "center",
     },
     primaryButtonText: {
-      color: palette.text,
+      color: palette.textOnSelected,
+      fontFamily: Fonts.sans,
       fontWeight: "900",
       fontSize: 14,
       textAlign: "center",

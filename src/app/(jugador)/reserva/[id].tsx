@@ -311,8 +311,8 @@ export default function ReservaDetalleScreen() {
         <Text style={styles.errorText}>
           {error ?? "No se encontró la reserva."}
         </Text>
-        <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
-          <Text style={styles.secondaryButtonText}>[ Volver ]</Text>
+        <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>← Volver</Text>
         </Pressable>
       </View>
     );
@@ -341,8 +341,8 @@ export default function ReservaDetalleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
-        <Text style={styles.secondaryButtonText}>[ Volver ]</Text>
+      <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => router.back()}>
+        <Text style={styles.backButtonText}>← Volver</Text>
       </Pressable>
 
       {modoOffline && <Text style={styles.offlineText}>Modo sin conexión</Text>}
@@ -355,6 +355,7 @@ export default function ReservaDetalleScreen() {
       </Text>
       {ubicacionReserva ? (
         <Pressable
+          accessibilityRole="button"
           style={styles.directionsButton}
           onPress={() => mostrarIndicaciones(ubicacionReserva)}
         >
@@ -396,12 +397,13 @@ export default function ReservaDetalleScreen() {
 
       {puedeCancelar ? (
         <Pressable
+          accessibilityRole="button"
           style={[styles.cancelButton, cancelando && styles.disabledButton]}
           disabled={cancelando}
           onPress={confirmarCancelacion}
         >
           <Text style={styles.cancelButtonText}>
-            {cancelando ? "Cancelando..." : "[ Cancelar reserva ]"}
+            {cancelando ? "Cancelando..." : "Cancelar reserva"}
           </Text>
         </Pressable>
       ) : activa && horasRestantes >= 0 ? (
@@ -441,7 +443,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       marginVertical: 16,
     },
     subtitle: {
-      color: palette.textOnSelected,
+      color: palette.text,
       fontFamily: Fonts.sans,
       fontSize: 23,
       fontWeight: "900",
@@ -461,7 +463,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       marginTop: 12,
     },
     status: {
-      color: palette.textOnSelected,
+      color: palette.text,
       fontFamily: Fonts.sans,
       fontSize: 16,
       fontWeight: "800",
@@ -481,7 +483,7 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       marginBottom: 8,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      borderRadius: 8,
+      borderRadius: 12,
       backgroundColor: palette.backgroundSelected,
     },
     directionsButtonText: {
@@ -522,18 +524,16 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       fontWeight: "900",
       marginTop: 18,
     },
-    secondaryButton: {
+    backButton: {
       alignSelf: "flex-start",
-      paddingVertical: 11,
-      paddingHorizontal: 14,
-      borderWidth: 1,
-      borderColor: palette.backgroundSelected,
-      backgroundColor: palette.background,
+      minHeight: 44,
+      justifyContent: "center",
+      paddingRight: 12,
+      marginBottom: 10,
     },
-    secondaryButtonText: {
-      color: palette.text,
+    backButtonText: {
+      color: palette.textSecondary,
       fontFamily: Fonts.sans,
-      fontSize: 15,
       fontWeight: "800",
     },
     cancelButton: {
@@ -541,10 +541,11 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: "#fb7185",
+      borderRadius: 12,
       padding: 14,
     },
     cancelButtonText: {
-      color: palette.text,
+      color: "#241c22",
       fontFamily: Fonts.sans,
       fontSize: 16,
       fontWeight: "900",

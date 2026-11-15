@@ -6,7 +6,7 @@ import { RoleTabIcon } from "@/components/ui/role-tab-icon";
 export default function AdminLayout() {
   return (
     <AuthGuard allowedRoles={["administrador"]}>
-      <Tabs backBehavior="fullHistory" screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="fullHistory" safeAreaInsets={{ bottom: 0 }} screenOptions={{ headerShown: false }}>
         <Tabs.Screen
           name="inicio"
           options={{
@@ -16,31 +16,39 @@ export default function AdminLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="perfil" options={{ title: "Perfil" }} />
-        <Tabs.Screen name="agenda" options={{ title: "Agenda", href: null }} />
+        <Tabs.Screen
+          name="perfil"
+          options={{
+            title: "Perfil",
+            tabBarIcon: ({ color, size, focused }) => (
+              <RoleTabIcon name="profile" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen name="agenda" options={{ title: "Agenda", tabBarItemStyle: { display: "none" } }} />
         <Tabs.Screen
           name="asistencia"
-          options={{ title: "Asistencia", href: null }}
+          options={{ title: "Asistencia", tabBarItemStyle: { display: "none" } }}
         />
         <Tabs.Screen
           name="inspecciones"
-          options={{ title: "Inspecciones", href: null }}
+          options={{ title: "Inspecciones", tabBarItemStyle: { display: "none" } }}
         />
         <Tabs.Screen
           name="escaner"
-          options={{ title: "Escáner QR", href: null }}
+          options={{ title: "Escáner QR", tabBarItemStyle: { display: "none" } }}
         />
         <Tabs.Screen
           name="precios"
-          options={{ title: "Precios", href: null }}
+          options={{ title: "Precios", tabBarItemStyle: { display: "none" } }}
         />
         <Tabs.Screen
           name="mantenimiento"
-          options={{ title: "Mantenimiento", href: null }}
+          options={{ title: "Mantenimiento", tabBarItemStyle: { display: "none" } }}
         />
         <Tabs.Screen
           name="reservas-fijas"
-          options={{ title: "Reservas fijas", href: null }}
+          options={{ title: "Reservas fijas", tabBarItemStyle: { display: "none" } }}
         />
       </Tabs>
     </AuthGuard>

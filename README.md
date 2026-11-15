@@ -160,7 +160,7 @@ Después de iniciar sesión, la navegación depende del rol:
 
 - jugador → `/(jugador)/inicio`
 - encargado → `/(staff)/agenda`
-- administrador → `/(admin)/agenda`
+- administrador → `/(admin)/inicio`
 
 Los grupos de navegación están definidos bajo `src/app/`. [`src/components/auth-guard.tsx`](./src/components/auth-guard.tsx) revisa la sesión y el rol permitido al entrar en las áreas protegidas. Si la sesión no está disponible, redirige al login.
 
@@ -183,6 +183,8 @@ En la barra del jugador se muestran **Inicio** y **Acceso QR**. Espacios y Mis r
 La lista activa permite filtrar por deporte y complejo en las vistas de espacios y disponibilidad. El filtro de complejo ofrece **Todos**, los complejos presentes en el catálogo y **Otros espacios** cuando hay espacios sin complejo. Los filtros se consultan en `GET /espacios`; para **Otros espacios** se filtra la respuesta localmente, y si falla la conexión se usa el catálogo guardado. La ficha muestra techado y capacidad cuando esos datos están disponibles. El mapa general permite seleccionar un complejo y ver sus espacios; desde un marcador o la ficha se pueden abrir indicaciones en Google Maps.
 
 En Android y iOS los mapas integrados usan Leaflet y MapLibre dentro de un WebView, con mapas de [OpenFreeMap](https://openfreemap.org/) y datos de OpenStreetMap. Necesitan conexión y WebGL: las bibliotecas se descargan desde un CDN y los mosaicos desde OpenFreeMap, que recibe las solicitudes de las áreas consultadas. La atribución aparece en el mapa. Si falla la carga, se puede reintentar sin impedir el acceso a la disponibilidad. Las indicaciones siguen abriéndose externamente en Google Maps. Para incorporar el cambio en un APK existente hay que generar una nueva build.
+
+El detalle de un espacio reproduce enlaces de YouTube dentro de la app y mantiene el reproductor nativo para archivos de video. Requiere conexión, que el propietario permita insertar el video y un identificador de aplicación configurado para la plataforma.
 
 Pruebas del puente y los marcadores: `node --test scripts/mapa-leaflet.test.mjs`.
 
@@ -213,11 +215,12 @@ La pantalla de detalle permite cancelar una reserva activa hasta el instante `ca
 3. Desde **Inicio > Escanear QR**, seleccionar el espacio y validar con biometría antes de usar la cámara o ingresar manualmente el código de la reserva. La API registra el ingreso y devuelve su hora. Si la biometría no está disponible, el escáner no se habilita.
 4. En **Asistencia** se consulta el estado y se puede marcar una ausencia a partir de los 15 minutos posteriores al inicio, si no se registró ingreso.
 5. En **Bloqueos** se seleccionan espacios, fecha, horario y motivo para crear o eliminar bloqueos. Las reservas afectadas pueden cancelarse; quitar un bloqueo no las restablece.
-6. En **Mantenimiento** se verifica la identidad con biometría o contraseña y se pueden cargar y consultar inspecciones con fotos o videos, además de acceder a bloqueos.
+6. En **Mantenimiento** se verifica la identidad con biometría o contraseña. Para cargar o consultar inspecciones con fotos o videos, se elige la cancha en el selector; desde allí también se puede acceder a bloqueos.
+   Al crear un bloqueo, primero se elige el complejo y luego una o varias canchas. Al cambiar de complejo se limpia la selección; los accesos para seleccionar todas o las descubiertas aplican al complejo elegido.
 
 ### 7. Flujo del administrador
 
-1. Ingresar con un usuario de rol `administrador`. La app abre la **Agenda**; desde **Inicio** se accede a las herramientas administrativas.
+1. Ingresar con un usuario de rol `administrador`. Tras verificar su identidad, la app abre **Inicio**, desde donde se accede a las herramientas administrativas.
 2. Consultar la agenda y usar **Escáner QR** para registrar ingresos con la misma validación biométrica del encargado.
 3. En **Asistencia**, consultar ingresos y registrar ausencias. En **Inspecciones**, confirmar la identidad con biometría o contraseña para cargar y consultar reportes con evidencias.
 4. En **Precios**, seleccionar un espacio y guardar su nueva tarifa. En **Reservas fijas**, crear, editar o dar de baja horarios recurrentes.

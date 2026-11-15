@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { AuthGuard } from "@/components/auth-guard";
+import { SpaceSelect } from "@/components/space-select";
 import { Fonts } from "@/constants/theme";
 import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import {
@@ -64,6 +65,7 @@ export default function MantenimientoStaffScreen() {
     null,
   );
   const [espacios, setEspacios] = useState<Espacio[]>([]);
+  const [cargandoEspacios, setCargandoEspacios] = useState(false);
   const [espacioInspeccion, setEspacioInspeccion] = useState("");
   const [observacion, setObservacion] = useState("");
   const [evidencias, setEvidencias] = useState<EvidenciaInspeccion[]>([]);
@@ -99,6 +101,7 @@ export default function MantenimientoStaffScreen() {
   const cargarResultados = useCallback(
     async (generacion = generacionPantalla.current) => {
     setMensaje(null);
+    setCargandoEspacios(true);
 
     try {
       const respuestaEspacios = await getEspacios();
@@ -134,6 +137,7 @@ export default function MantenimientoStaffScreen() {
       }
     } finally {
       if (generacion === generacionPantalla.current) {
+        setCargandoEspacios(false);
       }
     }
     },
@@ -188,6 +192,7 @@ export default function MantenimientoStaffScreen() {
       setMensaje(null);
       setMensajeInspeccion(null);
       setEspacios([]);
+      setCargandoEspacios(false);
       setEspacioInspeccion("");
       setObservacion("");
       setEvidencias([]);
@@ -479,33 +484,26 @@ export default function MantenimientoStaffScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Nuevo reporte de inspección</Text>
               <Text style={styles.label}>Cancha</Text>
-              <View style={styles.spaceOptions}>
-                {espacios.map((espacio) => (
+              <SpaceSelect
+                spaces={espacios}
+                selectedId={espacioInspeccion}
+                onSelect={seleccionarEspacio}
+                disabled={guardandoInspeccion || cargandoEspacios || espacios.length === 0}
+                placeholder={cargandoEspacios ? "Cargando canchas..." : "No hay canchas disponibles"}
+              />
+              {mensaje ? (
+                <>
+                  <Text accessibilityRole="alert" style={styles.message}>{mensaje}</Text>
                   <Pressable
-                    key={espacio.id}
                     accessibilityRole="button"
-                    accessibilityState={{
-                      selected: espacio.id === espacioInspeccion,
-                    }}
-                    onPress={() => seleccionarEspacio(espacio.id)}
-                    style={[
-                      styles.spaceOption,
-                      espacio.id === espacioInspeccion &&
-                        styles.spaceOptionSelected,
-                    ]}
+                    style={styles.secondaryButton}
+                    onPress={() => void cargarResultados()}
+                    disabled={cargandoEspacios}
                   >
-                    <Text
-                      style={[
-                        styles.spaceOptionText,
-                        espacio.id === espacioInspeccion &&
-                          styles.spaceOptionTextSelected,
-                      ]}
-                    >
-                      {espacio.nombre}
-                    </Text>
+                    <Text style={styles.secondaryButtonText}>Reintentar</Text>
                   </Pressable>
-                ))}
-              </View>
+                </>
+              ) : null}
 
               <Text style={styles.label}>Observación</Text>
               <TextInput
@@ -733,31 +731,6 @@ function createStyles(palette: ReturnType<typeof useTheme>) {
     },
     observationInput: {
       minHeight: 88,
-    },
-    spaceOptions: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    spaceOption: {
-      borderWidth: 1,
-      borderColor: palette.backgroundSelected,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: palette.background,
-    },
-    spaceOptionSelected: {
-      backgroundColor: palette.backgroundSelected,
-    },
-    spaceOptionText: {
-      color: palette.text,
-      fontSize: 13,
-      fontWeight: "700",
-      fontFamily: Fonts.sans,
-    },
-    spaceOptionTextSelected: {
-      color: palette.textOnSelected,
     },
     primaryButton: {
       backgroundColor: palette.backgroundSelected,
