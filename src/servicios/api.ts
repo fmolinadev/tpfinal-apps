@@ -216,6 +216,16 @@ export function apiPost<T>(
   });
 }
 
+export function apiPut<T>(
+  endpoint: string,
+  datos?: unknown,
+): Promise<T> {
+  return request<T>(endpoint, {
+    method: "PUT",
+    body: datos === undefined ? undefined : JSON.stringify(datos),
+  });
+}
+
 export function apiPatch<T>(
   endpoint: string,
   datos?: unknown,

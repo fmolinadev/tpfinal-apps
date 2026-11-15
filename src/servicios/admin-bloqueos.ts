@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost } from "@/servicios/api";
+import { apiDelete, apiGetAll, apiPost } from "@/servicios/api";
 
 export type Bloqueo = {
   id: string;
@@ -36,17 +36,17 @@ export async function listarBloqueos(
   if (espacioId) parametros.set("espacioId", espacioId);
 
   const query = parametros.toString();
-  const respuesta = await apiGet<RespuestaLista<Bloqueo>>(
-    `/bloqueos${query ? `?${query}` : ""}`,
-  );
-
-  return respuesta.datos;
+  return apiGetAll<Bloqueo>(`/bloqueos${query ? `?${query}` : ""}`);
 }
 
 export async function crearBloqueo(
   input: CrearBloqueoInput,
-): Promise<void> {
-  await apiPost("/bloqueos", input);
+): Promise<Bloqueo[]> {
+  const respuesta = await apiPost<RespuestaLista<Bloqueo>>(
+    "/bloqueos",
+    input,
+  );
+  return respuesta.datos;
 }
 
 export async function eliminarBloqueo(id: string): Promise<void> {

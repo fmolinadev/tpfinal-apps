@@ -9,8 +9,11 @@ import {
   View,
 } from "react-native";
 
+import { Fonts } from "@/constants/theme";
+import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import { getCurrentUserSession } from "@/persistencia/session";
 import {
+  enriquecerReservasDesdeCacheLocal,
   getMisReservas,
   guardarReservasEnCache,
   obtenerReservasDesdeCache,
@@ -21,6 +24,7 @@ const DURACION_TURNO_MS = 60 * 60 * 1000;
 
 function esProxima(reserva: Reserva): boolean {
   return (
+    (reserva.estado === "activa" || reserva.estado === "confirmada") &&
     new Date(reserva.fechaHoraInicio).getTime() + DURACION_TURNO_MS > Date.now()
   );
 }
@@ -41,7 +45,24 @@ function formatearHora(fechaIso: string): string {
   });
 }
 
+function etiquetaEstado(estado: Reserva["estado"]): string {
+  switch (estado) {
+    case "activa":
+    case "confirmada":
+      return "Confirmada";
+    case "cancelada":
+      return "Cancelada";
+    case "completada":
+    case "cumplida":
+      return "Completada";
+    case "ausente":
+      return "No se presentó";
+  }
+}
+
 export default function ReservasScreen() {
+  const palette = useTheme();
+  const styles = useThemeStyles(createStyles, palette);
   const router = useRouter();
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [vista, setVista] = useState<"proximas" | "pasadas">("proximas");
@@ -61,6 +82,20 @@ export default function ReservasScreen() {
         return;
       }
 
+      const reservasCacheadasSinEspacios = await obtenerReservasDesdeCache(
+        usuario.id,
+      );
+      const reservasCacheadas =
+        reservasCacheadasSinEspacios === null
+          ? null
+          : await enriquecerReservasDesdeCacheLocal(
+              reservasCacheadasSinEspacios,
+            );
+      if (reservasCacheadas !== null) {
+        setReservas(reservasCacheadas);
+        setLoading(false);
+      }
+
       try {
         const respuesta = await getMisReservas(usuario.id);
         if ("error" in respuesta && respuesta.error) {
@@ -68,14 +103,29 @@ export default function ReservasScreen() {
         }
 
         setReservas(respuesta.datos);
-        await guardarReservasEnCache(respuesta.datos, usuario.id);
-      } catch {
-        const reservasCacheadas = await obtenerReservasDesdeCache(usuario.id);
+        setModoOffline(false);
+        try {
+          await guardarReservasEnCache(respuesta.datos, usuario.id);
+        } catch (cacheError) {
+          console.warn(
+            "No se pudo actualizar la caché local de reservas.",
+            cacheError,
+          );
+        }
+      } catch (remoteError) {
         if (reservasCacheadas === null) {
-          throw new Error("No hay conexión ni reservas guardadas localmente.");
+          throw remoteError;
         }
         setReservas(reservasCacheadas);
         setModoOffline(true);
+        try {
+          await guardarReservasEnCache(reservasCacheadas, usuario.id);
+        } catch (cacheError) {
+          console.warn(
+            "No se pudo guardar el nombre de espacio en la caché de reservas.",
+            cacheError,
+          );
+        }
       }
     } catch (err) {
       setError(
@@ -101,13 +151,26 @@ export default function ReservasScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Mis reservas</Text>
-        {modoOffline && <Text style={styles.offline}>Modo sin conexión</Text>}
+        <View style={styles.header}>
+          <Text style={styles.title}>Mis reservas</Text>
+          <Text style={styles.subtitle}>
+            Consultá tus próximos turnos y el historial de reservas.
+          </Text>
+        </View>
+        {modoOffline ? (
+          <View style={styles.offline}>
+            <Text style={styles.offlineTexto}>
+              Modo sin conexión · Mostrando reservas guardadas
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.tabs}>
           <Pressable
             style={[styles.tab, vista === "proximas" && styles.tabActivo]}
             onPress={() => setVista("proximas")}
+            accessibilityRole="button"
+            accessibilityState={{ selected: vista === "proximas" }}
           >
             <Text style={[styles.tabTexto, vista === "proximas" && styles.tabTextoActivo]}>
               Próximas
@@ -116,6 +179,8 @@ export default function ReservasScreen() {
           <Pressable
             style={[styles.tab, vista === "pasadas" && styles.tabActivo]}
             onPress={() => setVista("pasadas")}
+            accessibilityRole="button"
+            accessibilityState={{ selected: vista === "pasadas" }}
           >
             <Text style={[styles.tabTexto, vista === "pasadas" && styles.tabTextoActivo]}>
               Pasadas
@@ -125,13 +190,16 @@ export default function ReservasScreen() {
 
         {loading ? (
           <View style={styles.estado}>
-            <ActivityIndicator size="large" color="#d9f99d" />
+            <ActivityIndicator
+              size="large"
+              color={palette.backgroundSelected}
+            />
             <Text style={styles.textoEstado}>Cargando reservas...</Text>
           </View>
         ) : error ? (
           <View style={styles.estado}>
             <Text style={styles.error}>{error}</Text>
-            <Pressable style={styles.botonSecundario} onPress={() => void cargarReservas()}>
+            <Pressable accessibilityRole="button" style={styles.botonSecundario} onPress={() => void cargarReservas()}>
               <Text style={styles.textoBoton}>Reintentar</Text>
             </Pressable>
           </View>
@@ -146,6 +214,7 @@ export default function ReservasScreen() {
             <Pressable
               key={reserva.id}
               style={styles.tarjeta}
+              accessibilityRole="button"
               onPress={() =>
                 router.push({
                   pathname: "/(jugador)/reserva/[id]",
@@ -153,17 +222,26 @@ export default function ReservasScreen() {
                 })
               }
             >
-              <Text style={styles.nombreEspacio}>
-                Cancha {reserva.espacioId.replace("espacio-", "")}
-              </Text>
-              <Text style={styles.detalle}>
+              <View style={styles.tarjetaHeader}>
+                <Text style={styles.nombreEspacio}>
+                  {reserva.espacioNombre ?? "Espacio sin nombre disponible"}
+                </Text>
+                <View style={styles.estadoBadge}>
+                  <Text style={styles.estadoReserva}>
+                    {etiquetaEstado(reserva.estado)}
+                  </Text>
+                </View>
+              </View>
+              {reserva.complejo ? (
+                <Text style={styles.detalle}>{reserva.complejo}</Text>
+              ) : null}
+              <Text style={styles.fecha}>
                 {formatearFecha(reserva.fechaHoraInicio)} ·{" "}
                 {formatearHora(reserva.fechaHoraInicio)}
               </Text>
               <Text style={styles.detalle}>
                 Jugadores: {reserva.cantidadJugadores}
               </Text>
-              <Text style={styles.estadoReserva}>Estado: {reserva.estado}</Text>
               <Text style={styles.accion}>Ver reserva →</Text>
             </Pressable>
           ))
@@ -173,38 +251,140 @@ export default function ReservasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b1120" },
-  content: { padding: 20, paddingBottom: 36 },
-  title: { color: "#fff", fontSize: 30, fontWeight: "900", marginBottom: 8 },
-  offline: { color: "#fef08a", fontSize: 15, fontWeight: "800", marginBottom: 16 },
-  tabs: { flexDirection: "row", gap: 10, marginBottom: 20 },
-  tab: {
-    flex: 1,
-    minHeight: 48,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#52627a",
-    backgroundColor: "#172238",
-  },
-  tabActivo: { backgroundColor: "#d9f99d", borderColor: "#ecfccb" },
-  tabTexto: { color: "#fff", fontSize: 15, fontWeight: "800" },
-  tabTextoActivo: { color: "#172238" },
-  tarjeta: {
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#52627a",
-    padding: 18,
-    marginBottom: 12,
-  },
-  nombreEspacio: { color: "#fff", fontSize: 20, fontWeight: "900", marginBottom: 8 },
-  detalle: { color: "#dbe7f5", fontSize: 15, lineHeight: 23 },
-  estadoReserva: { color: "#d9f99d", fontWeight: "800", marginTop: 8 },
-  accion: { color: "#fff", fontWeight: "900", marginTop: 14 },
-  estado: { alignItems: "center", paddingVertical: 50, gap: 14 },
-  textoEstado: { color: "#dbe7f5", fontSize: 17, textAlign: "center" },
-  error: { color: "#fecaca", fontSize: 16, textAlign: "center" },
-  botonSecundario: { padding: 14, borderWidth: 1, borderColor: "#8fa2bc" },
-  textoBoton: { color: "#fff", fontWeight: "800" },
-});
+function createStyles(palette: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: palette.backgroundElement },
+    content: { padding: 20, paddingBottom: 36, gap: 14 },
+    header: { gap: 5, marginBottom: 4 },
+    title: {
+      color: palette.text,
+      fontFamily: Fonts.sans,
+      fontSize: 30,
+      fontWeight: "900",
+    },
+    subtitle: {
+      color: palette.text,
+      fontFamily: Fonts.sans,
+      fontSize: 15,
+      lineHeight: 21,
+    },
+    offline: {
+      backgroundColor: palette.background,
+      borderRadius: 12,
+      padding: 12,
+    },
+    offlineTexto: {
+      color: palette.textSecondary,
+      fontFamily: Fonts.sans,
+      fontSize: 14,
+      fontWeight: "800",
+    },
+    tabs: {
+      flexDirection: "row",
+      backgroundColor: palette.background,
+      borderRadius: 12,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: palette.backgroundElement,
+    },
+    tab: {
+      flex: 1,
+      minHeight: 48,
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: 9,
+    },
+    tabActivo: { backgroundColor: palette.backgroundSelected },
+    tabTexto: {
+      color: palette.text,
+      fontFamily: Fonts.sans,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    tabTextoActivo: { color: palette.textOnSelected },
+    tarjeta: {
+      backgroundColor: palette.background,
+      borderWidth: 1,
+      borderColor: palette.backgroundElement,
+      borderRadius: 16,
+      padding: 16,
+      gap: 5,
+    },
+    tarjetaHeader: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    nombreEspacio: {
+      color: palette.text,
+      fontFamily: Fonts.sans,
+      fontSize: 19,
+      fontWeight: "800",
+      flexShrink: 1,
+    },
+    detalle: {
+      color: palette.textSecondary,
+      fontFamily: Fonts.sans,
+      fontSize: 15,
+      lineHeight: 23,
+    },
+    fecha: {
+      color: palette.text,
+      fontFamily: Fonts.sans,
+      fontSize: 15,
+      fontWeight: "800",
+      marginTop: 4,
+    },
+    estadoBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: palette.backgroundElement,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    estadoReserva: {
+      color: palette.textSecondary,
+      fontFamily: Fonts.sans,
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    accion: {
+      color: palette.textSecondary,
+      fontFamily: Fonts.sans,
+      fontWeight: "800",
+      marginTop: 7,
+    },
+    estado: {
+      alignItems: "center",
+      padding: 24,
+      gap: 14,
+      backgroundColor: palette.background,
+      borderRadius: 16,
+    },
+    textoEstado: {
+      color: palette.textSecondary,
+      fontFamily: Fonts.sans,
+      fontSize: 17,
+      textAlign: "center",
+    },
+    error: {
+      color: palette.textSecondary,
+      fontFamily: Fonts.sans,
+      fontSize: 16,
+      textAlign: "center",
+    },
+    botonSecundario: {
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      backgroundColor: palette.backgroundSelected,
+      borderRadius: 9,
+    },
+    textoBoton: {
+      color: palette.textOnSelected,
+      fontFamily: Fonts.sans,
+      fontWeight: "800",
+    },
+  });
+}

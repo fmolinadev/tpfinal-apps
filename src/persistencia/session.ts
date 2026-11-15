@@ -1,5 +1,6 @@
 import {
     authenticateWithBiometrics,
+    actualizarUsuarioSesion,
     clearSessionToken,
     clearSessionUser,
     getSessionToken,
@@ -7,7 +8,7 @@ import {
     saveSessionToken,
     saveSessionUser,
 } from "@/servicios/auth";
-import { limpiarCacheReservas } from "@/servicios/reservas";
+import { limpiarAvisosSuspension, limpiarCacheReservas } from "@/servicios/reservas";
 import { limpiarRecordatoriosLocales } from "@/servicios/notificaciones";
 import {
     desregistrarDispositivoPush,
@@ -18,8 +19,12 @@ export async function restoreSession(): Promise<{
   hasSession: boolean;
 }> {
   const token = await getSessionToken();
+  if (!token) {
+    return { hasSession: false };
+  }
 
-  return { hasSession: token !== null };
+  await actualizarUsuarioSesion();
+  return { hasSession: true };
 }
 
 export async function finishBiometricLogin(): Promise<boolean> {
@@ -42,7 +47,11 @@ export async function getCurrentUserSession() {
 
 export async function clearAppSession(): Promise<void> {
   try {
-    await limpiarCacheReservas();
+    try {
+      await limpiarAvisosSuspension();
+    } finally {
+      await limpiarCacheReservas();
+    }
   } finally {
     try {
       await desregistrarDispositivoPush();

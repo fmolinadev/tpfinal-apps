@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -8,7 +9,10 @@ import {
   View,
 } from "react-native";
 
+import { Fonts } from "@/constants/theme";
+import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import {
+  clearAppSession,
   finishBiometricLogin,
   getCurrentUserSession,
 } from "@/persistencia/session";
@@ -17,6 +21,8 @@ import type { Usuario } from "@/tipos/usuario";
 import { rutaInicioPorRol } from "@/utilidades/rutas";
 
 export default function BiometricScreen() {
+  const palette = useTheme();
+  const styles = useThemeStyles(createStyles, palette);
   const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [biometriaDisponible, setBiometriaDisponible] = useState(false);
@@ -24,6 +30,7 @@ export default function BiometricScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [verificandoPassword, setVerificandoPassword] = useState(false);
+  const [cambiandoCuenta, setCambiandoCuenta] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -144,6 +151,23 @@ export default function BiometricScreen() {
     }
   }
 
+  async function usarOtraCuenta() {
+    if (cambiandoCuenta) return;
+    setCambiandoCuenta(true);
+    try {
+      await clearAppSession();
+    } catch (errorLimpieza) {
+      Alert.alert(
+        "Sesión finalizada",
+        errorLimpieza instanceof Error
+          ? `No se pudo borrar toda la caché local: ${errorLimpieza.message}`
+          : "No se pudo borrar toda la caché local.",
+      );
+    } finally {
+      router.replace("/(auth)/login");
+    }
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -160,6 +184,7 @@ export default function BiometricScreen() {
             setError(null);
           }}
           placeholder="Ingresá tu contraseña"
+          placeholderTextColor={palette.textSecondary}
           secureTextEntry
           autoComplete="current-password"
           textContentType="password"
@@ -200,82 +225,103 @@ export default function BiometricScreen() {
 
         <Pressable
           style={styles.linkButton}
-          onPress={() => router.replace("/(auth)/login")}
+          onPress={() => void usarOtraCuenta()}
+          disabled={cambiandoCuenta}
         >
-          <Text style={styles.linkText}>Ingresar con otra cuenta</Text>
+          <Text style={styles.linkText}>
+            {cambiandoCuenta ? "Cerrando sesión..." : "Ingresar con otra cuenta"}
+          </Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#eef2ff",
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 12,
-    color: "#111827",
-    textAlign: "center",
-  },
-  status: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#475569",
-    marginBottom: 20,
-    lineHeight: 23,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    color: "#334155",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    color: "#111827",
-  },
-  error: {
-    color: "#b42318",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  button: {
-    backgroundColor: "#4338ca",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.55 },
-  buttonText: { color: "#fff", fontWeight: "700" },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: "#4338ca",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  secondaryButtonText: { color: "#4338ca", fontWeight: "700" },
-  linkButton: { alignItems: "center", paddingVertical: 14, marginTop: 4 },
-  linkText: { color: "#4338ca", fontWeight: "600" },
-});
+function createStyles(palette: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      padding: 24,
+      backgroundColor: palette.backgroundElement,
+    },
+    card: {
+      backgroundColor: palette.background,
+      borderRadius: 20,
+      padding: 24,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "700",
+      marginBottom: 12,
+      color: palette.text,
+      textAlign: "center",
+      fontFamily: Fonts.sans,
+    },
+    status: {
+      fontSize: 16,
+      textAlign: "center",
+      color: palette.textSecondary,
+      marginBottom: 20,
+      lineHeight: 23,
+      fontFamily: Fonts.sans,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "600",
+      marginBottom: 8,
+      color: palette.text,
+      fontFamily: Fonts.sans,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: palette.backgroundElement,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 12,
+      fontSize: 16,
+      color: palette.text,
+      fontFamily: Fonts.sans,
+    },
+    error: {
+      color: palette.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+      marginBottom: 12,
+    },
+    button: {
+      backgroundColor: palette.backgroundSelected,
+      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    buttonDisabled: { opacity: 0.55 },
+    buttonText: {
+      color: palette.textOnSelected,
+      fontWeight: "700",
+      fontFamily: Fonts.sans,
+    },
+    secondaryButton: {
+      borderWidth: 1,
+      borderColor: palette.backgroundSelected,
+      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      alignItems: "center",
+      marginTop: 10,
+    },
+    secondaryButtonText: {
+      color: palette.textSecondary,
+      fontWeight: "700",
+      fontFamily: Fonts.sans,
+    },
+    linkButton: { alignItems: "center", paddingVertical: 14, marginTop: 4 },
+    linkText: {
+      color: palette.textSecondary,
+      fontWeight: "600",
+      fontFamily: Fonts.sans,
+    },
+  });
+}

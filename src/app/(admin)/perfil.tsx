@@ -9,11 +9,15 @@ import {
   View,
 } from "react-native";
 
-import { Colors, Fonts } from "@/constants/theme";
+import { Fonts } from "@/constants/theme";
+import { ThemePreferenceControl } from "@/components/theme-preference-control";
+import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import { clearAppSession, getCurrentUserSession } from "@/persistencia/session";
 import type { Usuario } from "@/tipos/usuario";
 
 export default function PerfilAdminScreen() {
+  const palette = useTheme();
+  const styles = useThemeStyles(createStyles, palette);
   const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
 
@@ -54,6 +58,7 @@ export default function PerfilAdminScreen() {
         <Text style={styles.label}>Teléfono</Text>
         <Text style={styles.value}>{usuario?.telefono ?? "Sin teléfono"}</Text>
       </View>
+      <ThemePreferenceControl />
       <Pressable
         style={styles.logoutButton}
         onPress={() => void cerrarSesion()}
@@ -70,103 +75,105 @@ export default function PerfilAdminScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.light.backgroundElement },
-  content: { padding: 20, gap: 14 },
-  eyebrow: {
-    color: Colors.light.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    fontFamily: Fonts.sans,
-  },
-  title: {
-    color: Colors.light.text,
-    fontSize: 30,
-    fontWeight: "900",
-    fontFamily: Fonts.sans,
-  },
-  card: {
-    backgroundColor: Colors.light.background,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.backgroundElement,
-    padding: 22,
-    alignItems: "center",
-    gap: 7,
-  },
-  avatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: Colors.light.backgroundSelected,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 5,
-  },
-  avatarText: {
-    color: Colors.light.background,
-    fontSize: 34,
-    fontWeight: "900",
-    fontFamily: Fonts.sans,
-  },
-  name: {
-    color: Colors.light.text,
-    fontSize: 22,
-    fontWeight: "900",
-    fontFamily: Fonts.sans,
-  },
-  role: {
-    color: Colors.light.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    fontFamily: Fonts.sans,
-  },
-  divider: {
-    width: "100%",
-    height: 1,
-    backgroundColor: Colors.light.backgroundElement,
-    marginVertical: 10,
-  },
-  label: {
-    alignSelf: "stretch",
-    color: Colors.light.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    fontFamily: Fonts.sans,
-  },
-  value: {
-    alignSelf: "stretch",
-    color: Colors.light.text,
-    fontSize: 16,
-    marginBottom: 7,
-    fontFamily: Fonts.sans,
-  },
-  logoutButton: {
-    borderWidth: 1,
-    borderColor: Colors.light.textSecondary,
-    borderRadius: 11,
-    padding: 15,
-    alignItems: "center",
-    marginTop: 6,
-  },
-  logoutText: {
-    color: Colors.light.textSecondary,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  homeButton: {
-    backgroundColor: Colors.light.backgroundSelected,
-    borderRadius: 11,
-    padding: 15,
-    alignItems: "center",
-  },
-  homeText: {
-    color: Colors.light.background,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-});
+function createStyles(palette: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: palette.backgroundElement },
+    content: { padding: 20, gap: 14 },
+    eyebrow: {
+      color: palette.textSecondary,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+      fontFamily: Fonts.sans,
+    },
+    title: {
+      color: palette.text,
+      fontSize: 30,
+      fontWeight: "900",
+      fontFamily: Fonts.sans,
+    },
+    card: {
+      backgroundColor: palette.background,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: palette.backgroundElement,
+      padding: 22,
+      alignItems: "center",
+      gap: 7,
+    },
+    avatar: {
+      width: 82,
+      height: 82,
+      borderRadius: 41,
+      backgroundColor: palette.backgroundSelected,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 5,
+    },
+    avatarText: {
+      color: palette.textOnSelected,
+      fontSize: 34,
+      fontWeight: "900",
+      fontFamily: Fonts.sans,
+    },
+    name: {
+      color: palette.text,
+      fontSize: 22,
+      fontWeight: "900",
+      fontFamily: Fonts.sans,
+    },
+    role: {
+      color: palette.textSecondary,
+      fontSize: 12,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      fontFamily: Fonts.sans,
+    },
+    divider: {
+      width: "100%",
+      height: 1,
+      backgroundColor: palette.backgroundElement,
+      marginVertical: 10,
+    },
+    label: {
+      alignSelf: "stretch",
+      color: palette.textSecondary,
+      fontSize: 12,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      fontFamily: Fonts.sans,
+    },
+    value: {
+      alignSelf: "stretch",
+      color: palette.text,
+      fontSize: 16,
+      marginBottom: 7,
+      fontFamily: Fonts.sans,
+    },
+    logoutButton: {
+      borderWidth: 1,
+      borderColor: palette.textSecondary,
+      borderRadius: 11,
+      padding: 15,
+      alignItems: "center",
+      marginTop: 6,
+    },
+    logoutText: {
+      color: palette.textSecondary,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    homeButton: {
+      backgroundColor: palette.backgroundSelected,
+      borderRadius: 11,
+      padding: 15,
+      alignItems: "center",
+    },
+    homeText: {
+      color: palette.textOnSelected,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+  });
+}

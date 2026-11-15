@@ -1,43 +1,21 @@
-export type Coordenadas = {
-  lat: number;
-  lng: number;
-};
+export interface CoordenadasEspacio {
+  latitud: number;
+  longitud: number;
+}
 
-export type TipoDeporte =
-  | "futbol"
-  | "futbol11"
-  | "tenis"
-  | "paddle"
-  | "padel"
-  | "basket"
-  | "voley"
-  | "gimnasio";
-
-export type TipoSuperficie =
-  | "cesped"
-  | "sintetico"
-  | "cemento"
-  | "parquet"
-  | "arena"
-  | "polvo-ladrillo"
-  | "piso-flotante"
-  | "cesped-natural"
-  | "cemento-alisado";
-
-export type Espacio = {
+export interface Espacio {
   id: string;
   nombre: string;
-  deporte: TipoDeporte;
-  superficie: TipoSuperficie;
-  iluminacion: boolean;
+  deporteId: string;
   complejo: string;
+  superficie: string;
+  techado: boolean;
+  iluminacion: boolean;
   capacidad: number;
-  descripcion: string;
-  precioHora: number;
-  foto: string;
+  precioPorHora: number;
+  coordenadas: CoordenadasEspacio;
+  imagenes: string[];
   videoUrl: string | null;
-  ubicacion: string;
-  coordenadas: Coordenadas;
-  caracteristicas: string[];
+  reglas: string;
   activo: boolean;
-};
+}

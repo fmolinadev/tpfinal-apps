@@ -18,6 +18,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.molidev.tpfinalapps",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -41,7 +42,12 @@
       ],
       "expo-secure-store",
       "expo-camera",
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Tu ubicación se usa solo para centrar el mapa de espacios."
+        }
+      ],
       "expo-notifications",
       "expo-video",
       "expo-sqlite",

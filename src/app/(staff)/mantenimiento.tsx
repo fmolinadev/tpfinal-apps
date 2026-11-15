@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,13 +14,13 @@ import {
 } from "react-native";
 
 import { AuthGuard } from "@/components/auth-guard";
-import { Colors, Fonts } from "@/constants/theme";
+import { Fonts } from "@/constants/theme";
+import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import {
   authenticateWithBiometrics,
   isBiometricSupported,
   verificarContrasena,
 } from "@/servicios/auth";
-import { listarBloqueos, type Bloqueo } from "@/servicios/admin-bloqueos";
 import {
   eliminarEvidenciaInspeccion,
   guardarEvidenciasInspeccion,
@@ -39,20 +39,16 @@ import type { Espacio } from "@/tipos";
 
 type EstadoAcceso = "verificando" | "contrasena" | "autorizado";
 
-function fechaLocal(): string {
-  const fecha = new Date();
-  const anio = fecha.getFullYear();
-  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
-  const dia = String(fecha.getDate()).padStart(2, "0");
-
-  return `${anio}-${mes}-${dia}`;
-}
+const ROLES_ENCARGADO = ["encargado"] as const;
 
 function mensajeDeError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
 export default function MantenimientoStaffScreen() {
+  const palette = useTheme();
+  const styles = useThemeStyles(createStyles, palette);
+  const router = useRouter();
   const generacionPantalla = useRef(0);
   const generacionReportes = useRef(0);
   const espacioReporteRef = useRef<string | null>(null);
@@ -63,12 +59,10 @@ export default function MantenimientoStaffScreen() {
   const [contrasena, setContrasena] = useState("");
   const [verificandoBiometria, setVerificandoBiometria] = useState(false);
   const [enviandoContrasena, setEnviandoContrasena] = useState(false);
-  const [cargandoResultados, setCargandoResultados] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [mensajeInspeccion, setMensajeInspeccion] = useState<string | null>(
     null,
   );
-  const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
   const [espacios, setEspacios] = useState<Espacio[]>([]);
   const [espacioInspeccion, setEspacioInspeccion] = useState("");
   const [observacion, setObservacion] = useState("");
@@ -105,13 +99,9 @@ export default function MantenimientoStaffScreen() {
   const cargarResultados = useCallback(
     async (generacion = generacionPantalla.current) => {
     setMensaje(null);
-    setCargandoResultados(true);
 
     try {
-      const [bloqueosActuales, respuestaEspacios] = await Promise.all([
-        listarBloqueos(fechaLocal()),
-        getEspacios(),
-      ]);
+      const respuestaEspacios = await getEspacios();
 
       if ("error" in respuestaEspacios) {
         throw new Error(
@@ -122,7 +112,6 @@ export default function MantenimientoStaffScreen() {
 
       if (generacion !== generacionPantalla.current) return;
 
-      setBloqueos(bloqueosActuales);
       setEspacios(respuestaEspacios.datos);
       const idEspacio =
         respuestaEspacios.datos.find(
@@ -140,12 +129,11 @@ export default function MantenimientoStaffScreen() {
     } catch (error) {
       if (generacion === generacionPantalla.current) {
         setMensaje(
-          mensajeDeError(error, "No se pudieron cargar los bloqueos."),
+          mensajeDeError(error, "No se pudieron cargar los espacios."),
         );
       }
     } finally {
       if (generacion === generacionPantalla.current) {
-        setCargandoResultados(false);
       }
     }
     },
@@ -197,10 +185,8 @@ export default function MantenimientoStaffScreen() {
       setContrasena("");
       setVerificandoBiometria(false);
       setEnviandoContrasena(false);
-      setCargandoResultados(false);
       setMensaje(null);
       setMensajeInspeccion(null);
-      setBloqueos([]);
       setEspacios([]);
       setEspacioInspeccion("");
       setObservacion("");
@@ -251,8 +237,6 @@ export default function MantenimientoStaffScreen() {
         setContrasena("");
         setVerificandoBiometria(false);
         setEnviandoContrasena(false);
-        setCargandoResultados(false);
-        setBloqueos([]);
         setEspacios([]);
         setEvidencias([]);
         setInspecciones([]);
@@ -386,22 +370,18 @@ export default function MantenimientoStaffScreen() {
     }
   }
 
-  function nombreEspacio(espacioId: string): string {
-    return espacios.find((espacio) => espacio.id === espacioId)?.nombre
-      ?? espacioId;
-  }
-
   return (
-    <AuthGuard allowedRoles={["encargado"]}>
+    <AuthGuard allowedRoles={ROLES_ENCARGADO}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.eyebrow}>OPERACIONES</Text>
-        <Text style={styles.title}>Mantenimiento y bloqueos</Text>
+        <Text style={styles.title}>Inspecciones de mantenimiento</Text>
         <Text style={styles.subtitle}>
-          Registrá inspecciones con fotos o videos y consultá los bloqueos.
+          Registrá inspecciones con fotos o videos. La gestión de bloqueos está
+          disponible en un formulario compartido con administración.
         </Text>
 
         {estadoAcceso !== "autorizado" ? (
@@ -417,7 +397,7 @@ export default function MantenimientoStaffScreen() {
 
             {estadoAcceso === "verificando" ? (
               <View style={styles.loading}>
-                <ActivityIndicator color={Colors.light.backgroundSelected} />
+                <ActivityIndicator color={palette.backgroundSelected} />
                 <Text style={styles.helper}>Preparando verificación...</Text>
               </View>
             ) : null}
@@ -446,7 +426,7 @@ export default function MantenimientoStaffScreen() {
                   value={contrasena}
                   onChangeText={setContrasena}
                   placeholder="Ingresá tu contraseña"
-                  placeholderTextColor={Colors.light.textSecondary}
+                  placeholderTextColor={palette.textSecondary}
                   secureTextEntry
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -473,6 +453,23 @@ export default function MantenimientoStaffScreen() {
           </View>
         ) : (
           <>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Bloqueos</Text>
+              <Text style={styles.helper}>
+                Elegí fecha, horario y uno o más espacios para crear, consultar
+                o eliminar bloqueos.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                style={styles.primaryButton}
+                onPress={() => router.push("/(staff)/bloqueos")}
+              >
+                <Text style={styles.primaryButtonText}>
+                  Administrar bloqueos
+                </Text>
+              </Pressable>
+            </View>
+
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Nuevo reporte de inspección</Text>
               <Text style={styles.label}>Cancha</Text>
@@ -509,7 +506,7 @@ export default function MantenimientoStaffScreen() {
                 value={observacion}
                 onChangeText={setObservacion}
                 placeholder="Describí el estado de la cancha"
-                placeholderTextColor={Colors.light.textSecondary}
+                placeholderTextColor={palette.textSecondary}
                 style={[styles.input, styles.observationInput]}
                 multiline
                 maxLength={1000}
@@ -602,7 +599,7 @@ export default function MantenimientoStaffScreen() {
             </View>
 
             {cargandoInspecciones ? (
-              <ActivityIndicator color={Colors.light.backgroundSelected} />
+              <ActivityIndicator color={palette.backgroundSelected} />
             ) : inspecciones.length === 0 ? (
               <View style={styles.card}>
                 <Text style={styles.empty}>
@@ -644,44 +641,6 @@ export default function MantenimientoStaffScreen() {
               ))
             )}
 
-            <View style={styles.resultsHeader}>
-              <Text style={styles.sectionTitle}>Bloqueos vigentes y futuros</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void cargarResultados()}
-                disabled={cargandoResultados}
-              >
-                <Text style={styles.refreshText}>Actualizar</Text>
-              </Pressable>
-            </View>
-
-            {mensaje ? <Text style={styles.message}>{mensaje}</Text> : null}
-
-            {cargandoResultados ? (
-              <ActivityIndicator color={Colors.light.backgroundSelected} />
-            ) : bloqueos.length === 0 ? (
-              <View style={styles.card}>
-                <Text style={styles.empty}>
-                  No hay bloqueos registrados desde hoy.
-                </Text>
-              </View>
-            ) : (
-              bloqueos.map((bloqueo) => (
-                <View key={bloqueo.id} style={styles.card}>
-                  <Text style={styles.cardTitle}>
-                    {nombreEspacio(bloqueo.espacioId)}
-                  </Text>
-                  <Text style={styles.detail}>Fecha: {bloqueo.fecha}</Text>
-                  <Text style={styles.detail}>
-                    Horario:{" "}
-                    {bloqueo.inicio && bloqueo.fin
-                      ? `${bloqueo.inicio} a ${bloqueo.fin}`
-                      : "Día completo"}
-                  </Text>
-                  <Text style={styles.detail}>Motivo: {bloqueo.motivo}</Text>
-                </View>
-              ))
-            )}
           </>
         )}
       </ScrollView>
@@ -689,201 +648,203 @@ export default function MantenimientoStaffScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 36,
-    gap: 14,
-  },
-  eyebrow: {
-    color: Colors.light.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.3,
-    fontFamily: Fonts.sans,
-  },
-  title: {
-    color: Colors.light.text,
-    fontSize: 29,
-    fontWeight: "900",
-    fontFamily: Fonts.sans,
-  },
-  subtitle: {
-    color: Colors.light.text,
-    fontSize: 15,
-    lineHeight: 21,
-    fontFamily: Fonts.sans,
-  },
-  card: {
-    backgroundColor: Colors.light.background,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.backgroundElement,
-    padding: 18,
-    gap: 9,
-  },
-  cardTitle: {
-    color: Colors.light.text,
-    fontSize: 18,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  account: {
-    color: Colors.light.textSecondary,
-    fontSize: 14,
-    fontWeight: "700",
-    fontFamily: Fonts.sans,
-  },
-  helper: {
-    color: Colors.light.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: Fonts.sans,
-  },
-  loading: {
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
-  },
-  label: {
-    color: Colors.light.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    fontFamily: Fonts.sans,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.backgroundSelected,
-    borderRadius: 10,
-    padding: 12,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.background,
-    fontFamily: Fonts.sans,
-  },
-  observationInput: {
-    minHeight: 88,
-  },
-  spaceOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  spaceOption: {
-    borderWidth: 1,
-    borderColor: Colors.light.backgroundSelected,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.light.background,
-  },
-  spaceOptionSelected: {
-    backgroundColor: Colors.light.backgroundSelected,
-  },
-  spaceOptionText: {
-    color: Colors.light.text,
-    fontSize: 13,
-    fontWeight: "700",
-    fontFamily: Fonts.sans,
-  },
-  spaceOptionTextSelected: {
-    color: Colors.light.background,
-  },
-  primaryButton: {
-    backgroundColor: Colors.light.backgroundSelected,
-    borderRadius: 10,
-    padding: 14,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: Colors.light.background,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: Colors.light.backgroundSelected,
-    borderRadius: 10,
-    padding: 13,
-    alignItems: "center",
-  },
-  secondaryButtonText: {
-    color: Colors.light.textSecondary,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  evidenceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  removeText: {
-    color: "#b91c1c",
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  evidenceGallery: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  evidenceImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 10,
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  videoEvidence: {
-    minWidth: 88,
-    height: 88,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 10,
-    padding: 8,
-    backgroundColor: Colors.light.backgroundSelected,
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  message: {
-    color: Colors.light.textSecondary,
-    fontWeight: "700",
-    lineHeight: 19,
-    fontFamily: Fonts.sans,
-  },
-  resultsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  sectionTitle: {
-    flex: 1,
-    color: Colors.light.text,
-    fontSize: 18,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  refreshText: {
-    color: Colors.light.textSecondary,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  detail: {
-    color: Colors.light.text,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: Fonts.sans,
-  },
-  empty: {
-    color: Colors.light.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: Fonts.sans,
-  },
-});
+function createStyles(palette: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: palette.backgroundElement,
+    },
+    content: {
+      padding: 20,
+      paddingBottom: 36,
+      gap: 14,
+    },
+    eyebrow: {
+      color: palette.textSecondary,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 1.3,
+      fontFamily: Fonts.sans,
+    },
+    title: {
+      color: palette.text,
+      fontSize: 29,
+      fontWeight: "900",
+      fontFamily: Fonts.sans,
+    },
+    subtitle: {
+      color: palette.text,
+      fontSize: 15,
+      lineHeight: 21,
+      fontFamily: Fonts.sans,
+    },
+    card: {
+      backgroundColor: palette.background,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: palette.backgroundElement,
+      padding: 18,
+      gap: 9,
+    },
+    cardTitle: {
+      color: palette.text,
+      fontSize: 18,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    account: {
+      color: palette.textSecondary,
+      fontSize: 14,
+      fontWeight: "700",
+      fontFamily: Fonts.sans,
+    },
+    helper: {
+      color: palette.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+      fontFamily: Fonts.sans,
+    },
+    loading: {
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 8,
+    },
+    label: {
+      color: palette.textSecondary,
+      fontSize: 12,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      fontFamily: Fonts.sans,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: palette.backgroundSelected,
+      borderRadius: 10,
+      padding: 12,
+      color: palette.text,
+      backgroundColor: palette.background,
+      fontFamily: Fonts.sans,
+    },
+    observationInput: {
+      minHeight: 88,
+    },
+    spaceOptions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    spaceOption: {
+      borderWidth: 1,
+      borderColor: palette.backgroundSelected,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: palette.background,
+    },
+    spaceOptionSelected: {
+      backgroundColor: palette.backgroundSelected,
+    },
+    spaceOptionText: {
+      color: palette.text,
+      fontSize: 13,
+      fontWeight: "700",
+      fontFamily: Fonts.sans,
+    },
+    spaceOptionTextSelected: {
+      color: palette.textOnSelected,
+    },
+    primaryButton: {
+      backgroundColor: palette.backgroundSelected,
+      borderRadius: 10,
+      padding: 14,
+      alignItems: "center",
+    },
+    primaryButtonText: {
+      color: palette.textOnSelected,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    secondaryButton: {
+      borderWidth: 1,
+      borderColor: palette.backgroundSelected,
+      borderRadius: 10,
+      padding: 13,
+      alignItems: "center",
+    },
+    secondaryButtonText: {
+      color: palette.textSecondary,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    evidenceRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    removeText: {
+      color: "#b91c1c",
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    evidenceGallery: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    evidenceImage: {
+      width: 88,
+      height: 88,
+      borderRadius: 10,
+      backgroundColor: palette.backgroundElement,
+    },
+    videoEvidence: {
+      minWidth: 88,
+      height: 88,
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: 10,
+      padding: 8,
+      backgroundColor: palette.backgroundSelected,
+    },
+    buttonDisabled: {
+      opacity: 0.55,
+    },
+    message: {
+      color: palette.textSecondary,
+      fontWeight: "700",
+      lineHeight: 19,
+      fontFamily: Fonts.sans,
+    },
+    resultsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    sectionTitle: {
+      flex: 1,
+      color: palette.text,
+      fontSize: 18,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    refreshText: {
+      color: palette.textSecondary,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    detail: {
+      color: palette.text,
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: Fonts.sans,
+    },
+    empty: {
+      color: palette.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: Fonts.sans,
+    },
+  });
+}

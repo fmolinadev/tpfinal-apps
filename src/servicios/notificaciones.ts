@@ -8,24 +8,49 @@ type SolicitudProgramada = {
   content: { data?: unknown };
 };
 
+export type ResultadoRecordatorio =
+  | "programado"
+  | "permiso-denegado"
+  | "fuera-de-plazo"
+  | "error";
+
+export type DatosNotificacion = Record<string, unknown>;
+
 let moduloNotificaciones: Promise<ModuloNotificaciones | null> | null = null;
 const RECORDATORIO_PREFIX = "recordatorio-turno-v1:";
+const suspensionesPushRecibidas = new Set<string>();
+
+function esObjeto(value: unknown): value is DatosNotificacion {
+  return typeof value === "object" && value !== null;
+}
+
+function registrarPushSuspension(
+  notificacion: import("expo-notifications").Notification,
+): void {
+  const { trigger, content } = notificacion.request;
+  const datos: unknown = content.data;
+  if (
+    trigger !== null &&
+    "type" in trigger &&
+    trigger.type === "push" &&
+    esObjeto(datos) &&
+    typeof datos.reservaId === "string" &&
+    (datos.tipo === "suspension-reserva" || datos.tipo === undefined)
+  ) {
+    suspensionesPushRecibidas.add(datos.reservaId);
+  }
+}
 
 async function cargarNotificaciones(): Promise<ModuloNotificaciones | null> {
   if (!moduloNotificaciones) {
     moduloNotificaciones = import("expo-notifications")
       .then((modulo) => {
-        modulo.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldPlaySound: true,
-            shouldSetBadge: false,
-            shouldShowBanner: true,
-            shouldShowList: true,
-          }),
-        });
         return modulo;
       })
-      .catch(() => null);
+      .catch((error: unknown) => {
+        console.error("No se pudo cargar expo-notifications.", error);
+        return null;
+      });
   }
 
   return moduloNotificaciones;
@@ -79,26 +104,59 @@ export async function solicitarPermisosNotificaciones(): Promise<boolean> {
   return permisosSolicitados.granted;
 }
 
+export async function notificarSuspensionReserva(
+  reservaId: string,
+  motivo: string,
+): Promise<boolean> {
+  if (Platform.OS === "web") return false;
+  const notifications = await cargarNotificaciones();
+  if (!notifications) throw new Error("No se pudieron cargar las notificaciones.");
+  if (!suspensionesPushRecibidas.has(reservaId)) {
+    try {
+      const presentadas = await notifications.getPresentedNotificationsAsync();
+      presentadas.forEach(registrarPushSuspension);
+    } catch (error) {
+      console.warn("No se pudieron consultar las notificaciones recibidas.", error);
+    }
+  }
+  if (suspensionesPushRecibidas.has(reservaId)) return true;
+  if (!(await notifications.getPermissionsAsync()).granted) return false;
+
+  await prepararCanalAndroid(notifications);
+  await notifications.scheduleNotificationAsync({
+    identifier: `suspension-reserva:${reservaId}`,
+    content: {
+      title: "Reserva suspendida",
+      body: `Tu reserva fue cancelada por un bloqueo. Motivo: ${motivo}`,
+      data: { tipo: "suspension-reserva", reservaId },
+      sound: "default",
+      ...(Platform.OS === "android" ? { channelId: "reservas" } : {}),
+    },
+    trigger: null,
+  });
+  return true;
+}
+
 async function programarRecordatorioTurnoInterno(
   reservaId: string,
   fechaHoraInicio: string,
   nombreCancha: string,
-): Promise<string | null> {
+): Promise<ResultadoRecordatorio> {
   const notifications = await cargarNotificaciones();
   if (!notifications) {
-    return null;
-  }
-
-  const tienePermiso = await solicitarPermisosNotificaciones();
-  if (!tienePermiso) {
-    return null;
+    return "error";
   }
 
   const fechaRecordatorio =
     new Date(fechaHoraInicio).getTime() - 2 * 60 * 60 * 1000;
   if (fechaRecordatorio <= Date.now()) {
     await cancelarRecordatorioTurno(reservaId);
-    return null;
+    return "fuera-de-plazo";
+  }
+
+  const tienePermiso = await solicitarPermisosNotificaciones();
+  if (!tienePermiso) {
+    return "permiso-denegado";
   }
 
   await cancelarRecordatorioTurno(reservaId);
@@ -133,14 +191,14 @@ async function programarRecordatorioTurnoInterno(
     throw error;
   }
 
-  return identificador;
+  return identificador ? "programado" : "error";
 }
 
 export async function programarRecordatorioTurno(
   reservaId: string,
   fechaHoraInicio: string,
   nombreCancha: string,
-): Promise<string | null> {
+): Promise<ResultadoRecordatorio> {
   try {
     return await programarRecordatorioTurnoInterno(
       reservaId,
@@ -149,7 +207,7 @@ export async function programarRecordatorioTurno(
     );
   } catch (error) {
     console.error("No se pudo programar el recordatorio local.", error);
-    return null;
+    return "error";
   }
 }
 
@@ -238,15 +296,137 @@ export async function reconciliarRecordatoriosReservas(
     }
   }
 
-  await Promise.all([
-    ...[...idsParaCancelar].map((identificador) =>
+  await Promise.all(
+    clavesParaBorrar.map((clave) => Storage.removeItem(clave)),
+  );
+  clavesParaBorrar.length = 0;
+  await Promise.all(
+    [...idsParaCancelar].map((identificador) =>
       notifications.cancelScheduledNotificationAsync(identificador),
     ),
-    ...clavesParaBorrar.map((clave) => Storage.removeItem(clave)),
-  ]);
+  );
+  idsParaCancelar.clear();
+
+  const permisos = await notifications.getPermissionsAsync();
+  if (permisos.granted) {
+    await prepararCanalAndroid(notifications);
+    for (const reserva of reservas) {
+      if (
+        !reservasActivas.has(reserva.id) ||
+        reservasConRecordatorio.has(reserva.id)
+      ) {
+        continue;
+      }
+
+      const fechaRecordatorio =
+        new Date(reserva.fechaHoraInicio).getTime() - 2 * 60 * 60 * 1000;
+      if (!Number.isFinite(fechaRecordatorio) || fechaRecordatorio <= Date.now()) {
+        continue;
+      }
+
+      const identificador = await notifications.scheduleNotificationAsync({
+        content: {
+          title: "Recordatorio de reserva",
+          body: "Tu turno deportivo comienza en 2 horas.",
+          data: { reservaId: reserva.id, tipo: "recordatorio-turno" },
+          sound: "default",
+        },
+        trigger: {
+          type: notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(fechaRecordatorio),
+          ...(Platform.OS === "android" ? { channelId: "reservas" } : {}),
+        },
+      });
+
+      try {
+        await Storage.setItem(
+          `${RECORDATORIO_PREFIX}${encodeURIComponent(reserva.id)}`,
+          identificador,
+        );
+      } catch (error) {
+        try {
+          await notifications.cancelScheduledNotificationAsync(identificador);
+        } catch (errorCancelacion) {
+          console.error(
+            "No se pudo cancelar el recordatorio tras fallar su persistencia.",
+            errorCancelacion,
+          );
+        }
+        throw error;
+      }
+    }
+  }
+
+}
+
+export async function escucharNotificaciones(
+  alRecibir: (datos: DatosNotificacion) => void,
+  alTocar: (datos: DatosNotificacion, identificador: string) => void,
+): Promise<() => void> {
+  const notifications = await cargarNotificaciones();
+  if (!notifications) return () => undefined;
+
+  const recibido = notifications.addNotificationReceivedListener(
+    (notificacion) => {
+      registrarPushSuspension(notificacion);
+      const datos: unknown = notificacion.request.content.data;
+      if (!esObjeto(datos)) return;
+      if (
+        typeof datos.reservaId === "string" &&
+        datos.tipo !== "recordatorio-turno"
+      ) {
+        void cancelarRecordatorioTurno(datos.reservaId).catch((error: unknown) =>
+          console.warn(
+            "No se pudo cancelar el recordatorio de una reserva notificada.",
+            error,
+          ),
+        );
+      }
+      alRecibir(datos);
+    },
+  );
+  const respuesta = notifications.addNotificationResponseReceivedListener(
+    (evento) => {
+      registrarPushSuspension(evento.notification);
+      const datos: unknown = evento.notification.request.content.data;
+      if (!esObjeto(datos)) return;
+      if (
+        typeof datos.reservaId === "string" &&
+        datos.tipo !== "recordatorio-turno"
+      ) {
+        void cancelarRecordatorioTurno(datos.reservaId).catch((error: unknown) =>
+          console.warn(
+            "No se pudo cancelar el recordatorio de una reserva notificada.",
+            error,
+          ),
+        );
+      }
+      alTocar(datos, evento.notification.request.identifier);
+    },
+  );
+
+  const ultimaRespuesta = await notifications.getLastNotificationResponseAsync();
+  if (ultimaRespuesta) {
+    registrarPushSuspension(ultimaRespuesta.notification);
+    const datos: unknown = ultimaRespuesta.notification.request.content.data;
+    if (esObjeto(datos)) {
+      alTocar(datos, ultimaRespuesta.notification.request.identifier);
+    }
+    try {
+      await notifications.clearLastNotificationResponseAsync();
+    } catch (error) {
+      console.warn("No se pudo limpiar la respuesta de notificación anterior.", error);
+    }
+  }
+
+  return () => {
+    recibido.remove();
+    respuesta.remove();
+  };
 }
 
 export async function limpiarRecordatoriosLocales(): Promise<void> {
+  suspensionesPushRecibidas.clear();
   const notifications = await cargarNotificaciones();
   const claves = (await Storage.getAllKeys()).filter((clave) =>
     clave.startsWith(RECORDATORIO_PREFIX),

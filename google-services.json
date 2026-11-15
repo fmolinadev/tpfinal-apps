@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "247245926209",
+    "project_id": "reservasdeportivas-df6ca",
+    "storage_bucket": "reservasdeportivas-df6ca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:247245926209:android:ccb55518a79c1901b97bc0",
+        "android_client_info": {
+          "package_name": "com.molidev.tpfinalapps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBG2LX6PTFZtQ_gXA34QgmrtTvjZrzJb_U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,12 +1,21 @@
 import { Tabs } from "expo-router";
 
 import { AuthGuard } from "@/components/auth-guard";
+import { RoleTabIcon } from "@/components/ui/role-tab-icon";
 
 export default function AdminLayout() {
   return (
     <AuthGuard allowedRoles={["administrador"]}>
       <Tabs screenOptions={{ headerShown: false }}>
-        <Tabs.Screen name="inicio" options={{ title: "Inicio" }} />
+        <Tabs.Screen
+          name="inicio"
+          options={{
+            title: "Inicio",
+            tabBarIcon: ({ color, size, focused }) => (
+              <RoleTabIcon name="home" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
         <Tabs.Screen name="perfil" options={{ title: "Perfil" }} />
         <Tabs.Screen name="agenda" options={{ title: "Agenda", href: null }} />
         <Tabs.Screen

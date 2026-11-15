@@ -2,6 +2,7 @@ import {
     HomeDashboard,
     type DashboardItem,
 } from "@/components/ui/home-dashboard";
+import { PlayerOnboarding } from "@/components/player-onboarding";
 
 const PLAYER_ITEMS: DashboardItem[] = [
   {
@@ -32,12 +33,15 @@ const PLAYER_ITEMS: DashboardItem[] = [
 
 export default function InicioScreen() {
   return (
-    <HomeDashboard
-      title="Hola"
-      description="Explorá los espacios, elegí tu horario y organizá tu próximo partido."
-      profileHref="/(jugador)/perfil"
-      fallbackName="deportista"
-      items={PLAYER_ITEMS}
-    />
+    <>
+      <HomeDashboard
+        title="Hola"
+        description="Explorá los espacios, elegí tu horario y organizá tu próximo partido."
+        profileHref="/(jugador)/perfil"
+        fallbackName="deportista"
+        items={PLAYER_ITEMS}
+      />
+      <PlayerOnboarding />
+    </>
   );
 }

@@ -1,26 +1,32 @@
+import type { EstadoReserva } from "./reserva";
+
 export type EstadoTurno =
   | "libre"
-  | "ocupado"
   | "reservado"
-  | "mantenimiento"
-  | "fijo";
+  | "fijo"
+  | "mantenimiento";
 
-export type Turno = {
+export interface TitularTurno {
+  usuarioId: string | null;
+  nombre: string;
+  telefono: string | null;
+  cantidadPersonas: number | null;
+}
+
+export interface Turno {
   id: string;
   espacioId: string;
   fecha: string;
-  hora: string;
-  precio: number;
+  inicio: string;
+  fin: string;
   estado: EstadoTurno;
-  motivo?: string;
-};
+  reservaId: string | null;
+  motivoBloqueo: string | null;
+  precio: number;
+  espacioNombre?: string;
+  titular?: TitularTurno | null;
+  reservaEstado?: EstadoReserva | null;
+  ingresoEn?: string | null;
+}
 
-export type Mantenimiento = {
-  id: string;
-  espacioId: string;
-  fecha: string;
-  horaInicio: string;
-  horaFin: string;
-  motivo: string;
-  activo: boolean;
-};
+export type TurnoAgenda = Turno;

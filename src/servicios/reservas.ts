@@ -1,13 +1,17 @@
 import type {
-  EstadoTurno,
+  Espacio,
   Reserva,
   RespuestaApi,
   Turno,
 } from "@/tipos";
+import type { Reserva as ReservaApi } from "@/tipos/reserva";
+import type { Turno as TurnoApi } from "@/tipos/turno";
 import Storage from "expo-sqlite/kv-store";
 import {
   guardarReservasLocales,
   limpiarReservasLocales,
+  obtenerCatalogoEspaciosLocal,
+  obtenerEspacioLocal,
   obtenerReservasLocales,
 } from "@/persistencia/base-local";
 import {
@@ -15,42 +19,92 @@ import {
   apiGetAll,
   apiPost,
 } from "./api";
+import { getEspacios } from "./espacios";
+import { obtenerUsuario } from "./usuarios";
 import {
   cancelarRecordatorioTurno,
+  notificarSuspensionReserva,
   reconciliarRecordatoriosReservas,
 } from "./notificaciones";
+import {
+  reconciliarAvisosSuspension,
+  type CancelacionPorBloqueo,
+  type EstadoAvisosSuspension,
+} from "@/utilidades/avisos-suspension";
+import type { Usuario } from "@/tipos/usuario";
 
 const RESERVAS_CACHE_PREFIX = "reservas-cache-v1:";
 const RESERVAS_CACHE_KEY_ANTERIOR = "reservas-cache-v1";
+const AVISOS_SUSPENSION_PREFIX = "avisos-suspension-v1:";
+let colaSincronizacionReservas: Promise<void> = Promise.resolve();
+let versionSesionAvisos = 0;
+
+function encolarSincronizacion<T>(operacion: () => Promise<T>): Promise<T> {
+  const resultado = colaSincronizacionReservas.then(operacion, operacion);
+  colaSincronizacionReservas = resultado.then(() => undefined, () => undefined);
+  return resultado;
+}
+
+async function sincronizarAvisosSuspension(
+  usuarioId: string,
+  reservas: Reserva[],
+  version: number,
+): Promise<void> {
+  const clave = `${AVISOS_SUSPENSION_PREFIX}${encodeURIComponent(usuarioId)}`;
+  const guardado = await Storage.getItem(clave);
+  let anteriores: EstadoAvisosSuspension = {};
+  if (guardado !== null) {
+    const datos: unknown = JSON.parse(guardado);
+    if (
+      typeof datos !== "object" ||
+      datos === null ||
+      Array.isArray(datos) ||
+      Object.values(datos).some((estado) => typeof estado !== "string")
+    ) {
+      throw new Error("El estado local de avisos de suspensión es inválido.");
+    }
+    anteriores = Object.fromEntries(Object.entries(datos));
+  }
+  const cache = await obtenerReservasLocales(usuarioId);
+  for (const reserva of cache ?? []) {
+    if (!(reserva.id in anteriores)) anteriores[reserva.id] = reserva.estado;
+  }
+
+  await reconciliarAvisosSuspension(
+    anteriores,
+    reservas,
+    async (reservaIds) => (
+      await Promise.all(reservaIds.map((reservaId) =>
+        apiGetAll<CancelacionPorBloqueo>(
+          `/yo/reservas/cancelaciones-por-bloqueo?reservaId=${encodeURIComponent(reservaId)}`,
+        ),
+      ))
+    ).flat(),
+    async (reservaId, motivo) => {
+      if (version !== versionSesionAvisos) return false;
+      return notificarSuspensionReserva(reservaId, motivo);
+    },
+    async (estado) => {
+      if (version === versionSesionAvisos) {
+        await Storage.setItem(clave, JSON.stringify(estado));
+      }
+    },
+  );
+}
+
+export async function limpiarAvisosSuspension(): Promise<void> {
+  versionSesionAvisos += 1;
+  await encolarSincronizacion(async () => {
+    const claves = (await Storage.getAllKeys()).filter((clave) =>
+      clave.startsWith(AVISOS_SUSPENSION_PREFIX),
+    );
+    if (claves.length > 0) await Storage.multiRemove(claves);
+  });
+}
 
 type RespuestaUnoApi<T> = {
   datos: T;
   meta: null;
-};
-
-type TurnoApi = {
-  id: string;
-  espacioId: string;
-  fecha: string;
-  inicio: string;
-  fin: string;
-  estado: EstadoTurno;
-  reservaId: string | null;
-  motivoBloqueo: string | null;
-  precio: number;
-};
-
-type ReservaApi = {
-  id: string;
-  turnoId: string;
-  espacioId: string;
-  usuarioId: string;
-  cantidadPersonas: number;
-  codigoQr: string;
-  estado: "confirmada" | "cancelada" | "cumplida" | "ausente";
-  ingresoEn: string | null;
-  creadaEn: string;
-  cancelableHasta: string;
 };
 
 export type ReservaAsistencia = {
@@ -61,7 +115,13 @@ export type ReservaAsistencia = {
   cantidadPersonas: number;
   estado: string;
   ingresoEn: string | null;
+  nombreJugador?: string;
+  telefonoJugador?: string;
+  ausenciasJugador?: number;
+  cancelacionesTardiasJugador?: number;
 };
+
+export type EstadoReservaDia = Pick<ReservaApi, "id" | "estado">;
 
 function errorRespuesta(
   mensaje: string,
@@ -70,6 +130,20 @@ function errorRespuesta(
   return {
     error: { codigo, mensaje },
   };
+}
+
+export async function agregarReservaACache(
+  reserva: Reserva,
+  usuarioId: string,
+): Promise<void> {
+  const reservasExistentes = await obtenerReservasLocales(usuarioId);
+  await guardarReservasLocales(
+    [
+      ...(reservasExistentes ?? []).filter((item) => item.id !== reserva.id),
+      reserva,
+    ],
+    usuarioId,
+  );
 }
 
 function respuestaErrorApi<T>(
@@ -92,7 +166,40 @@ function respuestaErrorApi<T>(
 export async function listarReservasPorFecha(
   fecha: string,
 ): Promise<ReservaAsistencia[]> {
-  return apiGetAll<ReservaAsistencia>(
+  const reservas = await apiGetAll<ReservaAsistencia>(
+    `/reservas?fecha=${encodeURIComponent(fecha)}`,
+  );
+  const usuariosPorId = new Map<string, Usuario>();
+  const usuarioIds = Array.from(
+    new Set(reservas.map((reserva) => reserva.usuarioId)),
+  );
+  for (let indice = 0; indice < usuarioIds.length; indice += 10) {
+    const usuarios = await Promise.all(
+      usuarioIds
+        .slice(indice, indice + 10)
+        .map(async (usuarioId) => [usuarioId, await obtenerUsuario(usuarioId)] as const),
+    );
+    for (const [usuarioId, usuario] of usuarios) {
+      usuariosPorId.set(usuarioId, usuario);
+    }
+  }
+
+  return reservas.map((reserva) => {
+    const usuario = usuariosPorId.get(reserva.usuarioId);
+    return {
+      ...reserva,
+      nombreJugador: usuario?.nombre,
+      telefonoJugador: usuario?.telefono,
+      ausenciasJugador: usuario?.ausencias,
+      cancelacionesTardiasJugador: usuario?.cancelacionesTardias,
+    };
+  });
+}
+
+export async function listarEstadosReservasPorFecha(
+  fecha: string,
+): Promise<EstadoReservaDia[]> {
+  return apiGetAll<EstadoReservaDia>(
     `/reservas?fecha=${encodeURIComponent(fecha)}`,
   );
 }
@@ -101,6 +208,15 @@ export async function marcarReservaAusente(
   reservaId: string,
 ): Promise<void> {
   await apiPost(`/reservas/${encodeURIComponent(reservaId)}/ausente`);
+}
+
+export async function cancelarReservaPorPedido(
+  reservaId: string,
+): Promise<void> {
+  await apiPost(
+    `/reservas/${encodeURIComponent(reservaId)}/cancelacion`,
+    {},
+  );
 }
 
 function fechaClave(fecha: Date): string {
@@ -125,23 +241,7 @@ function obtenerFechaDesdeTurnoId(turnoId: string): string {
   return `${fecha.slice(0, 4)}-${fecha.slice(4, 6)}-${fecha.slice(6, 8)}T${hora}:00:00-03:00`;
 }
 
-function obtenerIdTurno(
-  espacioId: string,
-  fechaHora: string,
-): string {
-  const fecha = new Date(fechaHora);
-
-  if (!Number.isFinite(fecha.getTime())) {
-    throw new Error("La fecha del turno no es válida.");
-  }
-
-  const fechaCompacta = fechaClave(fecha).replaceAll("-", "");
-  const hora = String(fecha.getHours()).padStart(2, "0");
-
-  return `tur-${espacioId}-${fechaCompacta}-${hora}`;
-}
-
-function adaptarReserva(reserva: ReservaApi): Reserva {
+function adaptarReserva(reserva: ReservaApi, espacio?: Espacio): Reserva {
   let fechaHoraInicio: string;
 
   try {
@@ -154,8 +254,13 @@ function adaptarReserva(reserva: ReservaApi): Reserva {
     id: reserva.id,
     usuarioId: reserva.usuarioId,
     espacioId: reserva.espacioId,
+    espacioNombre: espacio?.nombre,
+    complejo: espacio?.complejo,
+    latitud: espacio?.latitud,
+    longitud: espacio?.longitud,
     fechaHoraInicio,
     cantidadJugadores: reserva.cantidadPersonas,
+    cancelableHasta: reserva.cancelableHasta,
     estado:
       reserva.estado === "confirmada"
         ? "activa"
@@ -164,6 +269,81 @@ function adaptarReserva(reserva: ReservaApi): Reserva {
           : reserva.estado,
     qrCode: reserva.codigoQr,
   };
+}
+
+async function obtenerEspaciosLocalesParaReservas(
+  espacioIds: string[],
+): Promise<Map<string, Espacio>> {
+  const espaciosPorId = new Map<string, Espacio>();
+  if (espacioIds.length === 0) return espaciosPorId;
+
+  try {
+    const espaciosLocales = await obtenerCatalogoEspaciosLocal();
+    if (espaciosLocales?.length) {
+      for (const espacio of espaciosLocales) {
+        espaciosPorId.set(espacio.id, espacio);
+      }
+    }
+  } catch (error) {
+    console.warn("No se pudo leer el catálogo local para las reservas.", error);
+  }
+
+  for (const espacioId of new Set(espacioIds)) {
+    if (espaciosPorId.has(espacioId)) continue;
+    try {
+      const espacioLocal = await obtenerEspacioLocal(espacioId);
+      if (espacioLocal) espaciosPorId.set(espacioId, espacioLocal);
+    } catch (error) {
+      console.warn("No se pudo leer el espacio local de una reserva.", error);
+    }
+  }
+
+  return espaciosPorId;
+}
+
+async function obtenerEspaciosParaReservas(
+  espacioIds: string[],
+): Promise<Map<string, Espacio>> {
+  const espaciosPorId =
+    await obtenerEspaciosLocalesParaReservas(espacioIds);
+  if (espacioIds.every((espacioId) => espaciosPorId.has(espacioId))) {
+    return espaciosPorId;
+  }
+
+  const respuesta = await getEspacios();
+  if ("error" in respuesta && respuesta.error) {
+    return espaciosPorId;
+  }
+  for (const espacio of respuesta.datos) {
+    espaciosPorId.set(espacio.id, espacio);
+  }
+  return espaciosPorId;
+}
+
+export async function enriquecerReservasDesdeCacheLocal(
+  reservas: Reserva[],
+): Promise<Reserva[]> {
+  const espaciosPorId = await obtenerEspaciosLocalesParaReservas(
+    reservas
+      .filter(
+        (reserva) =>
+          !reserva.espacioNombre ||
+          reserva.latitud === undefined ||
+          reserva.longitud === undefined,
+      )
+      .map((reserva) => reserva.espacioId),
+  );
+  return reservas.map((reserva) => {
+    const espacio = espaciosPorId.get(reserva.espacioId);
+    if (!espacio) return reserva;
+    return {
+      ...reserva,
+      espacioNombre: reserva.espacioNombre ?? espacio.nombre,
+      complejo: reserva.complejo ?? espacio.complejo,
+      latitud: reserva.latitud ?? espacio.latitud,
+      longitud: reserva.longitud ?? espacio.longitud,
+    };
+  });
 }
 
 export async function guardarReservasEnCache(
@@ -248,6 +428,7 @@ export async function getTurnos(
         fechaHoraInicio: `${turno.fecha}T${turno.inicio}:00-03:00`,
         estado: turno.estado,
         precio: turno.precio,
+        motivoBloqueo: turno.motivoBloqueo,
       })),
     );
 
@@ -269,7 +450,15 @@ export async function getTurnos(
 }
 
 export async function getMisReservas(
-  _usuarioId: string,
+  usuarioId: string,
+): Promise<RespuestaApi<Reserva>> {
+  const version = versionSesionAvisos;
+  return encolarSincronizacion(() => obtenerMisReservas(usuarioId, version));
+}
+
+async function obtenerMisReservas(
+  usuarioId: string,
+  version: number,
 ): Promise<RespuestaApi<Reserva>> {
   try {
     const [proximas, pasadas] = await Promise.all([
@@ -277,9 +466,27 @@ export async function getMisReservas(
       apiGetAll<ReservaApi>("/yo/reservas?cuando=pasadas"),
     ]);
 
-    const reservasUsuario = [...proximas, ...pasadas].map(adaptarReserva);
+    const reservasApi = [...proximas, ...pasadas];
+    const espaciosPorId = await obtenerEspaciosParaReservas(
+      reservasApi.map((reserva) => reserva.espacioId),
+    );
+    const reservasUsuario = reservasApi.map((reserva) =>
+      adaptarReserva(reserva, espaciosPorId.get(reserva.espacioId)),
+    );
+    if (reservasUsuario.some((reserva) => reserva.usuarioId !== usuarioId)) {
+      throw new Error("La API devolvió reservas de otro usuario.");
+    }
+    if (version === versionSesionAvisos) {
+      try {
+        await sincronizarAvisosSuspension(usuarioId, reservasUsuario, version);
+      } catch (error) {
+        console.warn("No se pudieron sincronizar los avisos de suspensión.", error);
+      }
+    }
     try {
-      await reconciliarRecordatoriosReservas(reservasUsuario);
+      if (version === versionSesionAvisos) {
+        await reconciliarRecordatoriosReservas(reservasUsuario);
+      }
     } catch (error) {
       console.warn("No se pudieron reconciliar los recordatorios locales.", error);
     }

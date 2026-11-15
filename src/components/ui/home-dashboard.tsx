@@ -6,7 +6,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    useColorScheme,
     View,
 } from "react-native";
 
@@ -14,7 +13,8 @@ import {
     RoleTabIcon,
     type RoleTabIconName,
 } from "@/components/ui/role-tab-icon";
-import { Colors, Fonts } from "@/constants/theme";
+import { Fonts } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { getCurrentUserSession } from "@/persistencia/session";
 import type { Usuario } from "@/tipos/usuario";
 
@@ -56,8 +56,7 @@ export function HomeDashboard({
   items,
 }: HomeDashboardProps) {
   const router = useRouter();
-  const scheme = useColorScheme();
-  const palette = Colors[scheme === "dark" ? "dark" : "light"];
+  const palette = useTheme();
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -89,12 +88,12 @@ export function HomeDashboard({
           borderRadius: 15,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: palette.textSecondary,
+          backgroundColor: palette.backgroundSelected,
           borderWidth: 1.5,
           borderColor: palette.backgroundElement,
         },
         profileInitials: {
-          color: Colors.light.background,
+          color: palette.textOnSelected,
           fontSize: 14,
           fontWeight: "900",
           fontFamily: Fonts.sans,

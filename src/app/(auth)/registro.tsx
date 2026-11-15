@@ -1,4 +1,4 @@
-import { Link, useRouter } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
     Alert,
@@ -11,11 +11,22 @@ import {
     View,
 } from "react-native";
 
+import { Fonts } from "@/constants/theme";
+import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import { registrarUsuario } from "@/servicios/auth";
-import { rutaInicioPorRol } from "@/utilidades/rutas";
+import {
+  rutaInicioPorRol,
+  rutaReservaPendiente,
+} from "@/utilidades/rutas";
 
 export default function RegistroScreen() {
+  const palette = useTheme();
+  const styles = useThemeStyles(createStyles, palette);
   const router = useRouter();
+  const parametros = useLocalSearchParams<{
+    reservaEspacioId?: string | string[];
+    reservaTurnoId?: string | string[];
+  }>();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -33,7 +44,12 @@ export default function RegistroScreen() {
       });
       Alert.alert("Registro exitoso", "Tu cuenta fue creada correctamente.");
 
-      router.replace(rutaInicioPorRol(usuario.rol));
+      const destinoReserva = rutaReservaPendiente(
+        usuario.rol,
+        obtenerParametro(parametros.reservaEspacioId),
+        obtenerParametro(parametros.reservaTurnoId),
+      );
+      router.replace(destinoReserva ?? rutaInicioPorRol(usuario.rol));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo crear la cuenta.";
@@ -62,6 +78,7 @@ export default function RegistroScreen() {
           onChangeText={setNombre}
           style={styles.input}
           placeholder="Ej.: María Pérez"
+          placeholderTextColor={palette.textSecondary}
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
@@ -74,6 +91,7 @@ export default function RegistroScreen() {
           onChangeText={setEmail}
           style={styles.input}
           placeholder="usuario@email.com"
+          placeholderTextColor={palette.textSecondary}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
@@ -88,6 +106,7 @@ export default function RegistroScreen() {
           onChangeText={setTelefono}
           style={styles.input}
           placeholder="+54 9 11 1234 5678"
+          placeholderTextColor={palette.textSecondary}
           keyboardType="phone-pad"
           autoComplete="tel"
           textContentType="telephoneNumber"
@@ -100,6 +119,7 @@ export default function RegistroScreen() {
           onChangeText={setPassword}
           style={styles.input}
           placeholder="Creá una contraseña"
+          placeholderTextColor={palette.textSecondary}
           secureTextEntry
           autoComplete="new-password"
           textContentType="newPassword"
@@ -116,7 +136,18 @@ export default function RegistroScreen() {
           </Text>
         </Pressable>
 
-        <Link href="/(auth)/login" asChild>
+        <Link
+          href={{
+            pathname: "/(auth)/login",
+            params: {
+              reservaEspacioId:
+                obtenerParametro(parametros.reservaEspacioId) ?? "",
+              reservaTurnoId:
+                obtenerParametro(parametros.reservaTurnoId) ?? "",
+            },
+          }}
+          asChild
+        >
           <Pressable style={styles.linkButton}>
             <Text style={styles.linkText}>Ya tengo cuenta</Text>
           </Pressable>
@@ -126,71 +157,86 @@ export default function RegistroScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#f8fafc",
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  logo: {
-    width: 170,
-    height: 80,
-    marginBottom: 8,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 3,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 18,
-    color: "#0f172a",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    color: "#334155",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#0f172a",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  linkButton: {
-    marginTop: 16,
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  linkText: {
-    color: "#4338ca",
-    fontWeight: "600",
-  },
-});
+function obtenerParametro(
+  valor: string | string[] | undefined,
+): string | undefined {
+  return Array.isArray(valor) ? valor[0] : valor;
+}
+
+function createStyles(palette: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: {
+      flexGrow: 1,
+      justifyContent: "center",
+      padding: 24,
+      backgroundColor: palette.backgroundElement,
+    },
+    header: {
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    logo: {
+      width: 170,
+      height: 80,
+      marginBottom: 8,
+    },
+    card: {
+      backgroundColor: palette.background,
+      borderRadius: 20,
+      padding: 24,
+      shadowColor: palette.text,
+      shadowOpacity: 0.08,
+      shadowRadius: 20,
+      elevation: 3,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "700",
+      textAlign: "center",
+      marginBottom: 18,
+      color: palette.text,
+      fontFamily: Fonts.sans,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "600",
+      marginBottom: 8,
+      color: palette.text,
+      fontFamily: Fonts.sans,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: palette.backgroundElement,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 16,
+      fontSize: 16,
+      backgroundColor: palette.background,
+      color: palette.text,
+      fontFamily: Fonts.sans,
+    },
+    button: {
+      backgroundColor: palette.backgroundSelected,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: "center",
+    },
+    buttonText: {
+      color: palette.textOnSelected,
+      fontSize: 16,
+      fontWeight: "700",
+      fontFamily: Fonts.sans,
+    },
+    linkButton: {
+      marginTop: 16,
+      alignItems: "center",
+      paddingVertical: 10,
+    },
+    linkText: {
+      color: palette.textSecondary,
+      fontWeight: "600",
+      fontFamily: Fonts.sans,
+    },
+  });
+}

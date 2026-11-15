@@ -7,8 +7,16 @@ export default function JugadorLayout() {
   return (
     <AuthGuard allowedRoles={["jugador"]}>
       <Tabs screenOptions={{ headerShown: false }}>
-        <Tabs.Screen name="inicio" options={{ title: "Inicio" }} />
-        <Tabs.Screen name="espacios" options={{ title: "Espacios" }} />
+        <Tabs.Screen
+          name="inicio"
+          options={{
+            title: "Inicio",
+            tabBarIcon: ({ color, size, focused }) => (
+              <RoleTabIcon name="home" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen name="espacios" options={{ title: "Espacios", href: null }} />
         <Tabs.Screen name="mapa" options={{ title: "Mapa", href: null }} />
         <Tabs.Screen
           name="escanear"
@@ -24,7 +32,7 @@ export default function JugadorLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="reservas" options={{ title: "Reservas" }} />
+        <Tabs.Screen name="reservas" options={{ title: "Reservas", href: null }} />
         <Tabs.Screen name="perfil" options={{ title: "Perfil", href: null }} />
         <Tabs.Screen
           name="disponibilidad/index"

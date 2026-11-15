@@ -19,4 +19,7 @@ export type Usuario = {
   telefono: string;
   password?: string;
   rol?: RolUsuario;
+  cancelacionesTardias?: number;
+  ausencias?: number;
+  espaciosFavoritos?: string[];
 };

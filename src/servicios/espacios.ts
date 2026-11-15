@@ -9,37 +9,34 @@ import {
   obtenerCatalogoEspaciosLocal,
   obtenerEspacioLocal,
 } from "@/persistencia/base-local";
+import type { Espacio as EspacioApi } from "@/tipos/espacio";
 import type { Deporte, Espacio, RespuestaApi, Superficie } from "@/tipos";
-
-type EspacioApi = {
-  id: string;
-  nombre: string;
-  deporteId: string;
-  complejo: string;
-  superficie: string;
-  techado: boolean;
-  iluminacion: boolean;
-  capacidad: number;
-  precioPorHora: number;
-  coordenadas: {
-    latitud: number;
-    longitud: number;
-  };
-  imagenes: string[];
-  videoUrl: string | null;
-  reglas: string;
-  activo: boolean;
-};
 
 type RespuestaUnicaApi<T> = {
   datos: T;
   meta: null;
 };
 
+export type FiltrosEspacios = {
+  deporte?: Deporte;
+  complejo?: string;
+};
+
+const DEPORTE_ID_POR_TIPO: Partial<Record<Deporte, string>> = {
+  futbol: "dep-futbol5",
+  futbol11: "dep-futbol11",
+  padel: "dep-padel",
+  basket: "dep-basquet",
+  voley: "dep-voley",
+  tenis: "dep-tenis",
+  gimnasio: "dep-gimnasio",
+};
+
 function convertirDeporte(deporteId: string): Deporte {
   const deportes: Record<string, Deporte> = {
     "dep-futbol5": "futbol",
     "dep-futbol11": "futbol11",
+    "dep-padel": "padel",
     "dep-basquet": "basket",
     "dep-voley": "voley",
     "dep-tenis": "tenis",
@@ -89,6 +86,17 @@ function adaptarEspacio(espacio: EspacioApi): Espacio {
   };
 }
 
+function filtrarEspaciosLocales(
+  espacios: Espacio[],
+  filtros: FiltrosEspacios,
+): Espacio[] {
+  return espacios.filter(
+    (espacio) =>
+      (!filtros.deporte || espacio.deporte === filtros.deporte) &&
+      (!filtros.complejo || espacio.complejo === filtros.complejo),
+  );
+}
+
 function respuestaError(
   error: unknown,
   mensajePredeterminado: string,
@@ -105,14 +113,33 @@ function respuestaError(
   };
 }
 
-export async function getEspacios(): Promise<RespuestaApi<Espacio>> {
+export async function getEspacios(
+  filtros: FiltrosEspacios = {},
+): Promise<RespuestaApi<Espacio>> {
+  const parametros = new URLSearchParams();
+  if (filtros.deporte) {
+    const deporteId = DEPORTE_ID_POR_TIPO[filtros.deporte];
+    if (deporteId) parametros.set("deporteId", deporteId);
+  }
+  if (filtros.complejo) {
+    parametros.set("complejo", filtros.complejo);
+  }
+  const query = parametros.toString();
+
   try {
-    const espacios = await apiGetAll<EspacioApi>("/espacios");
+    const espacios = await apiGetAll<EspacioApi>(
+      query ? `/espacios?${query}` : "/espacios",
+    );
     const espaciosAdaptados = espacios.map(adaptarEspacio);
-    try {
-      await guardarCatalogoEspaciosLocal(espaciosAdaptados);
-    } catch (error) {
-      console.warn("No se pudo actualizar el catálogo local de espacios.", error);
+    if (!query) {
+      try {
+        await guardarCatalogoEspaciosLocal(espaciosAdaptados);
+      } catch (error) {
+        console.warn(
+          "No se pudo actualizar el catálogo local de espacios.",
+          error,
+        );
+      }
     }
 
     return {
@@ -127,12 +154,16 @@ export async function getEspacios(): Promise<RespuestaApi<Espacio>> {
     try {
       const espaciosLocales = await obtenerCatalogoEspaciosLocal();
       if (espaciosLocales !== null) {
+        const espaciosFiltrados = filtrarEspaciosLocales(
+          espaciosLocales,
+          filtros,
+        );
         return {
-          datos: espaciosLocales,
+          datos: espaciosFiltrados,
           meta: {
-            total: espaciosLocales.length,
+            total: espaciosFiltrados.length,
             pagina: 1,
-            porPagina: espaciosLocales.length,
+            porPagina: espaciosFiltrados.length,
           },
         };
       }

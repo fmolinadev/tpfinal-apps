@@ -2,7 +2,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 
 import { registrarDispositivoPushEnSegundoPlano } from "@/servicios/dispositivos";
-import { apiPost } from "@/servicios/api";
+import { apiGet, apiPost } from "@/servicios/api";
 import type { LoginInput, RegistroInput, Usuario } from "@/tipos/usuario";
 
 export const SESSION_TOKEN_KEY = "app_session_token";
@@ -15,6 +15,17 @@ type RespuestaSesion = {
   };
   meta: null;
 };
+
+type RespuestaUsuario = {
+  datos: Usuario;
+  meta: null;
+};
+
+export async function actualizarUsuarioSesion(): Promise<Usuario> {
+  const respuesta = await apiGet<RespuestaUsuario>("/yo");
+  await saveSessionUser(respuesta.datos);
+  return respuesta.datos;
+}
 
 export async function saveSessionToken(token: string): Promise<void> {
   await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
@@ -102,9 +113,23 @@ export async function registrarUsuario({
     throw new Error("Todos los campos son obligatorios.");
   }
 
+  const emailNormalizado = email.trim();
+  if (emailNormalizado.length > 254) {
+    throw new Error("El email es demasiado largo.");
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+    throw new Error("El email no es válido.");
+  }
+  if (password.length < 8) {
+    throw new Error("La contraseña tiene que tener al menos 8 caracteres.");
+  }
+  if (password.length > 200) {
+    throw new Error("La contraseña es demasiado larga.");
+  }
+
   const respuesta = await apiPost<RespuestaSesion>("/auth/registro", {
     nombre: nombre.trim(),
-    email: email.trim(),
+    email: emailNormalizado,
     telefono: telefono.trim(),
     contrasena: password,
   });

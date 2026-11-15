@@ -8,13 +8,16 @@ import {
     View,
 } from "react-native";
 
-import { Colors, Fonts } from "@/constants/theme";
+import { Fonts } from "@/constants/theme";
+import { useTheme, useThemeStyles } from "@/hooks/use-theme";
 import { getCurrentUserSession } from "@/persistencia/session";
 import { validarAccesoPorQrEspacio } from "@/servicios/reservas";
 
 type EstadoEscaneo = "permitido" | "denegado";
 
 export default function EscanearAccesoScreen() {
+  const palette = useTheme();
+  const styles = useThemeStyles(createStyles, palette);
   const [permission, requestPermission] = useCameraPermissions();
   const [escaneando, setEscaneando] = useState(false);
   const [procesando, setProcesando] = useState(false);
@@ -117,7 +120,7 @@ export default function EscanearAccesoScreen() {
             {procesando ? (
               <ActivityIndicator
                 size="large"
-                color={Colors.light.backgroundSelected}
+                color={palette.backgroundSelected}
               />
             ) : (
               <Text style={styles.bodyText}>{mensaje}</Text>
@@ -155,70 +158,72 @@ export default function EscanearAccesoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    gap: 14,
-    padding: 20,
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  title: {
-    color: Colors.light.text,
-    fontSize: 30,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-  subtitle: {
-    color: Colors.light.text,
-    fontSize: 15,
-    lineHeight: 21,
-    fontFamily: Fonts.sans,
-  },
-  cameraFrame: {
-    height: 280,
-    overflow: "hidden",
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: Colors.light.backgroundSelected,
-    backgroundColor: Colors.light.background,
-  },
-  cameraMessage: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  bodyText: {
-    color: Colors.light.text,
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
-    fontFamily: Fonts.sans,
-  },
-  resultBox: {
-    padding: 14,
-    borderRadius: 12,
-    borderLeftWidth: 5,
-    backgroundColor: Colors.light.background,
-  },
-  successBox: { borderLeftColor: "#15803d" },
-  errorBox: { borderLeftColor: "#b91c1c" },
-  resultText: {
-    color: Colors.light.text,
-    fontWeight: "700",
-    fontFamily: Fonts.sans,
-  },
-  button: {
-    alignItems: "center",
-    padding: 15,
-    borderRadius: 12,
-    backgroundColor: Colors.light.backgroundSelected,
-  },
-  disabled: { opacity: 0.6 },
-  buttonText: {
-    color: Colors.light.background,
-    fontWeight: "800",
-    fontFamily: Fonts.sans,
-  },
-});
+function createStyles(palette: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      gap: 14,
+      padding: 20,
+      backgroundColor: palette.backgroundElement,
+    },
+    title: {
+      color: palette.text,
+      fontSize: 30,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+    subtitle: {
+      color: palette.text,
+      fontSize: 15,
+      lineHeight: 21,
+      fontFamily: Fonts.sans,
+    },
+    cameraFrame: {
+      height: 280,
+      overflow: "hidden",
+      borderRadius: 18,
+      borderWidth: 2,
+      borderColor: palette.backgroundSelected,
+      backgroundColor: palette.background,
+    },
+    cameraMessage: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    bodyText: {
+      color: palette.text,
+      fontSize: 16,
+      fontWeight: "700",
+      textAlign: "center",
+      fontFamily: Fonts.sans,
+    },
+    resultBox: {
+      padding: 14,
+      borderRadius: 12,
+      borderLeftWidth: 5,
+      backgroundColor: palette.background,
+    },
+    successBox: { borderLeftColor: "#15803d" },
+    errorBox: { borderLeftColor: "#b91c1c" },
+    resultText: {
+      color: palette.text,
+      fontWeight: "700",
+      fontFamily: Fonts.sans,
+    },
+    button: {
+      alignItems: "center",
+      padding: 15,
+      borderRadius: 12,
+      backgroundColor: palette.backgroundSelected,
+    },
+    disabled: { opacity: 0.6 },
+    buttonText: {
+      color: palette.textOnSelected,
+      fontWeight: "800",
+      fontFamily: Fonts.sans,
+    },
+  });
+}

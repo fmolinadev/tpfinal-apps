@@ -9,6 +9,7 @@ export const Colors = {
     backgroundElement: "#EBEAEB",
     backgroundSelected: "#A55890",
     textSecondary: "#8F3C78",
+    textOnSelected: "#FFFFFF",
   },
   dark: {
     text: "#FFFFFF",
@@ -16,6 +17,7 @@ export const Colors = {
     backgroundElement: "#8F3C78",
     backgroundSelected: "#A55890",
     textSecondary: "#EBEAEB",
+    textOnSelected: "#FFFFFF",
   },
 } as const;
 

@@ -4,33 +4,19 @@ import {
   apiPatch,
   apiPost,
 } from "@/servicios/api";
+import type {
+  DatosReservaFija,
+  ReservaFija,
+} from "@/tipos/reserva";
 
-export type ReservaFija = {
-  id: string;
-  espacioId: string;
-  titular: string;
-  dia: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  inicio: string;
-  fin: string;
-  desde: string;
-  hasta: string | null;
-  activa: boolean;
-};
+export type { ReservaFija } from "@/tipos/reserva";
 
 export type EspacioReservaFija = {
   id: string;
   nombre: string;
 };
 
-export type DatosReservaFija = {
-  titular: string;
-  dia: number;
-  inicio: string;
-  fin: string;
-  desde: string;
-  hasta: string | null;
-  activa?: boolean;
-};
+export type { DatosReservaFija } from "@/tipos/reserva";
 
 type EspacioApi = {
   id: string;

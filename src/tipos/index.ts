@@ -61,13 +61,19 @@ export interface Turno {
   fechaHoraInicio: FechaISO;
   estado: EstadoTurno;
   precio: number;
+  motivoBloqueo?: string | null;
 }
 
 export interface Reserva {
   id: string;
   usuarioId: string;
   espacioId: string;
+  espacioNombre?: string;
+  complejo?: string;
+  latitud?: number;
+  longitud?: number;
   fechaHoraInicio: FechaISO;
+  cancelableHasta?: FechaISO;
   cantidadJugadores: number;
   estado: EstadoReserva;
   qrCode: string;
