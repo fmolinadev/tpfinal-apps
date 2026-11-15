@@ -11,7 +11,7 @@ const STAFF_SCREENS = [
 export default function StaffLayout() {
   return (
     <AuthGuard allowedRoles={["encargado", "administrador"]}>
-      <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="fullHistory" screenOptions={{ headerShown: false }}>
         <Tabs.Screen
           name="inicio"
           options={{

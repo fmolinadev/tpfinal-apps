@@ -49,7 +49,7 @@ La API configurada para el despliegue corre en **Render**, con **Supabase** para
 
 - Acceder al panel administrativo.
 - Gestionar precios por espacio, bloqueos y reservas fijas.
-- Acceder a la agenda y al control de ingreso.
+- Acceder a la agenda, el control de ingreso, la asistencia y los reportes de inspección.
 
 La disponibilidad y el alcance de cada acción dependen de la pantalla; las pantallas funcionales cargan sus datos desde la API.
 
@@ -128,6 +128,7 @@ Para comprobar los filtros, avisos de suspensión, mapas y persistencia de la gu
 
 ```bash
 node --test scripts/avisos-suspension.test.mjs
+node --test scripts/autenticacion-navegacion.test.mjs
 node --test scripts/filtros-espacios.test.mjs
 node --test scripts/mapa-leaflet.test.mjs
 node --experimental-test-module-mocks --test scripts/onboarding.test.mjs
@@ -164,6 +165,8 @@ Después de iniciar sesión, la navegación depende del rol:
 Los grupos de navegación están definidos bajo `src/app/`. [`src/components/auth-guard.tsx`](./src/components/auth-guard.tsx) revisa la sesión y el rol permitido al entrar en las áreas protegidas. Si la sesión no está disponible, redirige al login.
 
 Si hay un token guardado, el arranque consulta `GET /yo` para validarlo y actualizar el perfil antes de abrir `/(auth)/biometria`. La pantalla permite continuar con biometría cuando está disponible o validar la contraseña; luego redirige según el rol. También permite cerrar esa sesión y usar otra cuenta.
+
+Al iniciar sesión con contraseña como encargado o administrador, la app también solicita biometría; si no está disponible o no se completa, se puede verificar la contraseña para continuar.
 
 Al entrar por primera vez al inicio con un perfil de jugador, se muestra una guía breve para consultar disponibilidad y reservar. La finalización u omisión se guarda localmente por ID de usuario y no se vuelve a mostrar para ese perfil.
 
@@ -216,9 +219,10 @@ La pantalla de detalle permite cancelar una reserva activa hasta el instante `ca
 
 1. Ingresar con un usuario de rol `administrador`. La app abre la **Agenda**; desde **Inicio** se accede a las herramientas administrativas.
 2. Consultar la agenda y usar **Escáner QR** para registrar ingresos con la misma validación biométrica del encargado.
-3. En **Precios**, seleccionar un espacio y guardar su nueva tarifa. En **Reservas fijas**, crear, editar o dar de baja horarios recurrentes.
-4. En **Mantenimiento**, confirmar la contraseña y administrar bloqueos y sus espacios afectados.
-5. Desde **Perfil**, consultar los datos y cerrar sesión.
+3. En **Asistencia**, consultar ingresos y registrar ausencias. En **Inspecciones**, confirmar la identidad con biometría o contraseña para cargar y consultar reportes con evidencias.
+4. En **Precios**, seleccionar un espacio y guardar su nueva tarifa. En **Reservas fijas**, crear, editar o dar de baja horarios recurrentes.
+5. En **Mantenimiento**, confirmar la contraseña y administrar bloqueos y sus espacios afectados. También se puede acceder desde Inspecciones.
+6. Desde **Perfil**, consultar los datos y cerrar sesión.
 
 El grupo `/(staff)` admite encargado y administrador; `/(admin)` está restringido al administrador. Las acciones se envían a la API, que aplica permisos y validaciones. La presencia de una pantalla o servicio no equivale a una prueba completa en un dispositivo.
 
@@ -321,6 +325,8 @@ Las respuestas de la API se tipan en los servicios. Los datos de sesión y las c
 | `/(admin)/inicio`         | Panel de accesos rápidos              |
 | `/(admin)/agenda`         | Agenda                                |
 | `/(admin)/escaner`        | Ruta administrativa de escáner        |
+| `/(admin)/asistencia`     | Consulta de ingresos y ausencias       |
+| `/(admin)/inspecciones`   | Reportes de inspección con evidencias |
 | `/(admin)/precios`        | Ruta administrativa de precios        |
 | `/(admin)/mantenimiento`  | Ruta administrativa de mantenimiento  |
 | `/(admin)/reservas-fijas` | Ruta administrativa de reservas fijas |

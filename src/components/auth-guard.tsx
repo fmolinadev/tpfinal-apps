@@ -24,6 +24,7 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   const palette = useTheme();
   const styles = useThemeStyles(createStyles, palette);
   const [isReady, setIsReady] = useState(false);
+  const [hasAuthorized, setHasAuthorized] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(
     null,
   );
@@ -57,6 +58,7 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
             return;
           }
 
+          setHasAuthorized(true);
           setIsReady(true);
         } catch (error) {
           if (active) {
@@ -77,9 +79,8 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
     }, [allowedRolesKey, attempt, router]),
   );
 
-  if (!isReady) {
-    return (
-      <View style={styles.container}>
+  const validation = (
+      <View style={styles.container} accessibilityViewIsModal>
         {verificationError ? (
           <>
             <Text accessibilityRole="alert" style={styles.text}>
@@ -100,14 +101,31 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
           </>
         )}
       </View>
-    );
+  );
+
+  if (!hasAuthorized) {
+    return validation;
   }
 
-  return <>{children}</>;
+  return (
+    <View style={styles.content}>
+      <View
+        style={styles.content}
+        pointerEvents={isReady ? "auto" : "none"}
+        accessibilityElementsHidden={!isReady}
+        importantForAccessibility={isReady ? "auto" : "no-hide-descendants"}
+      >
+        {children}
+      </View>
+      {!isReady ? <View style={styles.overlay}>{validation}</View> : null}
+    </View>
+  );
 }
 
 function createStyles(palette: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
+    content: { flex: 1 },
+    overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
     container: {
       flex: 1,
       alignItems: "center",

@@ -56,7 +56,11 @@ export default function LoginScreen() {
         reservaEspacioId,
         reservaTurnoId,
       );
-      router.replace(destinoReserva ?? rutaInicioPorRol(usuario.rol));
+      if (usuario.rol === "encargado" || usuario.rol === "administrador") {
+        router.replace("/(auth)/biometria");
+      } else {
+        router.replace(destinoReserva ?? rutaInicioPorRol(usuario.rol));
+      }
     } catch (error) {
       setErrorLogin(
         error instanceof Error ? error.message : "Ocurrió un error inesperado.",

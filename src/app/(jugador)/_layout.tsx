@@ -6,7 +6,7 @@ import { RoleTabIcon } from "@/components/ui/role-tab-icon";
 export default function JugadorLayout() {
   return (
     <AuthGuard allowedRoles={["jugador"]}>
-      <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="fullHistory" screenOptions={{ headerShown: false }}>
         <Tabs.Screen
           name="inicio"
           options={{

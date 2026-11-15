@@ -6,7 +6,7 @@ import { RoleTabIcon } from "@/components/ui/role-tab-icon";
 export default function AdminLayout() {
   return (
     <AuthGuard allowedRoles={["administrador"]}>
-      <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="fullHistory" screenOptions={{ headerShown: false }}>
         <Tabs.Screen
           name="inicio"
           options={{
@@ -18,6 +18,14 @@ export default function AdminLayout() {
         />
         <Tabs.Screen name="perfil" options={{ title: "Perfil" }} />
         <Tabs.Screen name="agenda" options={{ title: "Agenda", href: null }} />
+        <Tabs.Screen
+          name="asistencia"
+          options={{ title: "Asistencia", href: null }}
+        />
+        <Tabs.Screen
+          name="inspecciones"
+          options={{ title: "Inspecciones", href: null }}
+        />
         <Tabs.Screen
           name="escaner"
           options={{ title: "Escáner QR", href: null }}

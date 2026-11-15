@@ -14,6 +14,18 @@ const ADMIN_ITEMS: DashboardItem[] = [
     icon: "scan",
   },
   {
+    title: "Asistencia",
+    description: "Consultar ingresos y registrar ausencias",
+    href: "/(admin)/asistencia",
+    icon: "attendance",
+  },
+  {
+    title: "Inspecciones",
+    description: "Registrar y consultar reportes de espacios",
+    href: "/(admin)/inspecciones",
+    icon: "maintenance",
+  },
+  {
     title: "Precios",
     description: "Editar tarifas por espacio",
     href: "/(admin)/precios",

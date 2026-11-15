@@ -39,7 +39,7 @@ import type { Espacio } from "@/tipos";
 
 type EstadoAcceso = "verificando" | "contrasena" | "autorizado";
 
-const ROLES_ENCARGADO = ["encargado"] as const;
+const ROLES_PERSONAL = ["encargado", "administrador"] as const;
 
 function mensajeDeError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -371,7 +371,7 @@ export default function MantenimientoStaffScreen() {
   }
 
   return (
-    <AuthGuard allowedRoles={ROLES_ENCARGADO}>
+    <AuthGuard allowedRoles={ROLES_PERSONAL}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -462,7 +462,13 @@ export default function MantenimientoStaffScreen() {
               <Pressable
                 accessibilityRole="button"
                 style={styles.primaryButton}
-                onPress={() => router.push("/(staff)/bloqueos")}
+                onPress={() =>
+                  router.push(
+                    usuario?.rol === "administrador"
+                      ? "/(admin)/mantenimiento"
+                      : "/(staff)/bloqueos",
+                  )
+                }
               >
                 <Text style={styles.primaryButtonText}>
                   Administrar bloqueos
