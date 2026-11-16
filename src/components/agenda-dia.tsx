@@ -156,8 +156,8 @@ export function AgendaDia() {
       "Cancelar a pedido",
       `¿Confirmás la cancelación de la reserva de ${turno.titular?.nombre ?? "este jugador"}? ${
         cancelacionTardia
-          ? "La API registrará una cancelación tardía en su perfil."
-          : "La API determinará si corresponde registrar una cancelación tardía."
+          ? "Se registrará una cancelación tardía en su perfil."
+          : "Se determinará si corresponde registrar una cancelación tardía."
       }`,
       [
         { text: "Volver", style: "cancel" },
@@ -204,7 +204,7 @@ export function AgendaDia() {
       <Text style={styles.eyebrow}>OPERACIONES</Text>
       <Text style={styles.title}>Agenda del complejo</Text>
       <Text style={styles.subtitle}>
-        Turnos, estados y titulares recibidos de la agenda de la API.
+        Consultá los turnos, sus estados y titulares.
       </Text>
 
       <DateSelector

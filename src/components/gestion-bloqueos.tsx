@@ -205,7 +205,7 @@ export function GestionBloqueos() {
     if (descubiertos.length === 0) {
       setMensaje({
         tipo: "error",
-        texto: "La API no identifica espacios descubiertos para esta sede.",
+        texto: "No se pudieron identificar espacios descubiertos en este complejo.",
       });
       return;
     }
@@ -239,7 +239,7 @@ export function GestionBloqueos() {
             )
             .map((reserva) => reserva.id),
         );
-        resultadoCancelaciones = `La API confirmó ${canceladas.size} reserva(s) cancelada(s) entre las que estaban afectadas antes de guardar.`;
+        resultadoCancelaciones = `Se confirmaron ${canceladas.size} reserva(s) cancelada(s) entre las que estaban afectadas antes de guardar.`;
       } catch (error) {
         resultadoCancelaciones = `No se pudo confirmar el total real de cancelaciones: ${
           error instanceof Error ? error.message : "error de consulta"
@@ -247,7 +247,7 @@ export function GestionBloqueos() {
       }
       setMensaje({
         tipo: "exito",
-        texto: `La API creó ${creados.length} bloqueo(s). ${resultadoCancelaciones}`,
+        texto: `Se crearon ${creados.length} bloqueo(s). ${resultadoCancelaciones}`,
       });
       setEspacioIds([]);
       setMotivo("");
@@ -362,7 +362,7 @@ export function GestionBloqueos() {
       <Text style={styles.eyebrow}>OPERACIONES</Text>
       <Text style={styles.title}>Bloqueos de espacios</Text>
       <Text style={styles.subtitle}>
-        Seleccioná uno o más espacios. La API cancelará las reservas
+        Seleccioná uno o más espacios. Se cancelarán las reservas
         confirmadas que cubra el bloqueo.
       </Text>
 

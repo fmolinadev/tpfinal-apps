@@ -114,7 +114,7 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   if (!API_URL) {
-    throw new Error("No está configurada la dirección de la API.");
+    throw new Error("No está configurada la dirección del servidor.");
   }
 
   const token = await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
@@ -143,7 +143,7 @@ async function request<T>(
     });
   } catch {
     throw new Error(
-      "No se pudo conectar con el servidor. Verificá que la API esté funcionando y que ambos dispositivos estén en la misma red Wi-Fi.",
+      "No se pudo conectar con el servidor. Verificá tu conexión a internet e intentá nuevamente.",
     );
   }
 

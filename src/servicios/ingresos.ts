@@ -29,7 +29,7 @@ export async function registrarIngreso(
     espacioId,
   });
   if (!respuesta.datos.ingresoEn) {
-    throw new Error("La API no devolvió la hora de ingreso registrada.");
+    throw new Error("No se recibió la hora de ingreso registrada.");
   }
 
   let nombreJugador: string | null = null;

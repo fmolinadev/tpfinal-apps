@@ -232,7 +232,7 @@ function obtenerFechaDesdeTurnoId(turnoId: string): string {
     /^tur-(esp-[A-Za-z0-9_-]{1,36})-(\d{8})-(\d{2})$/.exec(turnoId);
 
   if (!coincidencia) {
-    throw new Error("La API devolvió un identificador de turno inválido.");
+    throw new Error("Se recibió un identificador de turno inválido.");
   }
 
   const fecha = coincidencia[2];
@@ -474,7 +474,7 @@ async function obtenerMisReservas(
       adaptarReserva(reserva, espaciosPorId.get(reserva.espacioId)),
     );
     if (reservasUsuario.some((reserva) => reserva.usuarioId !== usuarioId)) {
-      throw new Error("La API devolvió reservas de otro usuario.");
+      throw new Error("Se recibieron reservas que pertenecen a otro usuario.");
     }
     if (version === versionSesionAvisos) {
       try {

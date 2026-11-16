@@ -162,7 +162,7 @@ export function ScannerIngreso({ subtitulo }: ScannerIngresoProps) {
       return;
     }
     if (!/^esp-[A-Za-z0-9_-]{1,36}$/.test(espacioId)) {
-      setMensaje("La API devolvió un identificador de espacio inválido.");
+      setMensaje("El identificador del espacio seleccionado no es válido.");
       await reproducirFeedbackHaptico(false);
       return;
     }

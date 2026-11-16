@@ -327,8 +327,7 @@ export default function ReservasFijasAdminScreen() {
         <Text style={styles.eyebrow}>PROGRAMACIÓN</Text>
         <Text style={styles.title}>Reservas fijas</Text>
         <Text style={styles.subtitle}>
-          Administrá turnos recurrentes. La API recibe día 0–6, horarios en
-          punto y fechas reales en formato AAAA-MM-DD.
+          Administrá turnos recurrentes con horarios en punto y fechas válidas.
         </Text>
 
         <View style={styles.formCard}>
